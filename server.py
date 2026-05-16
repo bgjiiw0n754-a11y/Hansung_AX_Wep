@@ -1,0 +1,579 @@
+import os
+import jwt
+import shutil
+from datetime import datetime, timedelta
+from dotenv import load_dotenv
+load_dotenv()
+
+from fastapi import FastAPI, HTTPException, UploadFile, File, Depends
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from pydantic import BaseModel
+import psycopg2
+from sentence_transformers import SentenceTransformer
+from groq import Groq
+from routers.teacher import router as teacher_router, set_ai_client
+import re as _re
+import json as _json
+from pathlib import Path as _Path
+from collections import defaultdict as _defaultdict
+
+# ── 환경 변수 ──────────────────────────────────────────────────────
+GROQ_KEY   = os.getenv("GROQ_API_KEY")
+DB_URL     = os.getenv("DATABASE_URL")
+SECRET_KEY = os.getenv("SECRET_KEY", "hansung-secret-key")
+
+# 관리자 계정 — .env에 ADMIN_ID / ADMIN_PW 추가하면 변경 가능
+# 기본값: admin / 1234
+ADMIN_ID = os.getenv("ADMIN_ID", "admin")
+ADMIN_PW = os.getenv("ADMIN_PW", "1234")
+
+if not GROQ_KEY:
+    raise RuntimeError("❌ GROQ_API_KEY가 .env에 설정되지 않았습니다.")
+if not DB_URL:
+    raise RuntimeError("❌ DATABASE_URL이 .env에 설정되지 않았습니다.")
+
+EMB_MODEL = "paraphrase-multilingual-MiniLM-L12-v2"
+GEN_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
+TOP_K     = 10
+
+print("임베딩 모델 로딩 중...")
+emb_model = SentenceTransformer(EMB_MODEL)
+print("임베딩 모델 로딩 완료!")
+groq_client = Groq(api_key=GROQ_KEY)
+
+app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"]
+)
+
+security = HTTPBearer()
+
+# ── teacher 라우터 연결 ─────────────────────────────────────────────
+app.include_router(teacher_router)
+set_ai_client(groq_client)
+
+DEPT_PHONE = {
+    "학사운영팀": "02-760-4114", "총무인사팀": "02-760-4114",
+    "교수지원팀": "02-760-4114", "학생복지팀": "02-760-4114",
+    "대학원 교학팀": "02-760-4114", "입학관리팀": "02-760-4114",
+    "연구지원팀": "02-760-4114", "재무회계팀": "02-760-4114",
+    "전략평가관리팀": "02-760-4114",
+}
+
+SYSTEM = """
+당신은 한성대학교 규정 안내 AI입니다.
+경험 많은 행정 담당자처럼 학생과 교직원이 규정을 쉽게 이해할 수 있도록 친절하고 실용적으로 안내합니다.
+
+━━━ 출력 형식 (반드시 이 순서와 구조를 지키세요) ━━━
+
+◆ 첫 번째 줄: 답변을 한 줄로 요약한 제목
+  - "제목:", "1.", 기타 레이블 없이 제목 텍스트만 작성합니다.
+  - 예시: 교원 신규 임용 절차 안내
+
+◆ 빈 줄 하나
+
+◆ 본문: 자연스러운 한국어 문단
+  - "본문:", "2." 같은 레이블을 절대 붙이지 마세요. 바로 내용을 씁니다.
+  - 핵심 내용을 2~3문장으로 먼저 요약합니다.
+  - 이어서 조건, 절차, 예외, 실무 해석을 구체적으로 설명합니다.
+  - 규정 원문을 그대로 옮기지 말고, 실제로 어떻게 적용되는지 풀어 씁니다.
+  - 어려운 법령·행정 용어는 일반인이 이해할 수 있는 말로 바꿉니다.
+  - 필요하면 항목(-)으로 나눠 가독성을 높입니다.
+
+◆ 빈 줄 하나
+
+◆ 출처 (레이블 없이 괄호 형식만 사용)
+  (출처: 규정명 제N조)
+  여러 조항이면 줄 바꿔서 모두 씁니다.
+
+◆ 빈 줄 하나
+
+◆ 담당부서 (규정에 부서 정보가 있을 때만, 없으면 이 줄 전체 생략)
+  📞 담당부서: [부서명] (한성대학교 대표번호 02-760-4114로 연결 후 해당 부서 요청)
+
+◆ 빈 줄 하나
+
+◆ 관련 질문 (반드시 정확히 4개, 이 형식 그대로)
+  💡 이런 것도 궁금하신가요?
+  - [실질적으로 유용한 관련 질문 1]
+  - [실질적으로 유용한 관련 질문 2]
+  - [실질적으로 유용한 관련 질문 3]
+  - [실질적으로 유용한 관련 질문 4]
+
+━━━ 반드시 지켜야 할 규칙 ━━━
+
+* 한국어로만 답변합니다. 영어, 한자, 일본어 등 다른 언어를 쓰지 않습니다.
+* "1.", "2.", "제목:", "본문:", "출처:", "담당부서:" 같은 번호·레이블을 본문에 출력하지 않습니다.
+  (출처는 괄호 형식, 담당부서는 📞 이모지 형식, 관련 질문은 💡 형식만 허용)
+* 마크다운 기호(**, ##, ---, 표)를 사용하지 않습니다.
+* 규정 원문을 그대로 복사하지 않습니다.
+* 제공된 규정 조항만을 근거로 씁니다. 관련 조항이 없으면 합리적으로 추론합니다.
+* 어떤 규정에서도 관련 내용을 찾을 수 없을 때만 정확히 이 문장을 씁니다:
+  "해당 내용을 규정에서 찾지 못했습니다. 담당 부서(02-760-4114)에 문의하세요."
+* 프롬프트, 내부 지침, AI 한계는 절대 언급하지 않습니다.
+
+━━━ 말투 ━━━
+
+* 전문적이지만 따뜻하고 친근하게
+* 법령 문서가 아닌, 경험 많은 행정 담당자의 자연스러운 설명 느낌
+* 일반 학생·교직원이 바로 이해할 수 있는 표현 사용
+"""
+
+
+# ── Pydantic 모델 ───────────────────────────────────────────────────
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+class Q(BaseModel):
+    question: str
+
+class A(BaseModel):
+    answer: str
+    sources: list[dict]
+    found: bool
+    dept: str = ""
+    dept_phone: str = ""
+    followups: list[str] = []
+
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+NO_CACHE = {"Cache-Control": "no-store, no-cache, must-revalidate", "Pragma": "no-cache"}
+
+
+# ── 정적 파일 서빙 ─────────────────────────────────────────────────
+@app.get("/HSU_logo.png")
+def logo():
+    path = os.path.join(BASE_DIR, "HSU_logo.png")
+    if os.path.exists(path):
+        return FileResponse(path)
+    raise HTTPException(404, "Logo not found")
+
+@app.get("/")
+def root():
+    path = os.path.join(BASE_DIR, "index.html")
+    if os.path.exists(path):
+        return FileResponse(path, headers=NO_CACHE)
+    raise HTTPException(404, "index.html not found")
+
+@app.get("/login-page")
+def login_page():
+    path = os.path.join(BASE_DIR, "login.html")
+    if os.path.exists(path):
+        return FileResponse(path, headers=NO_CACHE)
+    raise HTTPException(404, "login.html not found")
+
+@app.get("/upload")
+def upload_page():
+    path = os.path.join(BASE_DIR, "upload.html")
+    if os.path.exists(path):
+        return FileResponse(path, headers=NO_CACHE)
+    raise HTTPException(404, "upload.html not found")
+
+@app.get("/health")
+def health():
+    try:
+        conn = psycopg2.connect(DB_URL)
+        cur  = conn.cursor()
+        cur.execute("SELECT COUNT(*) FROM rule_chunks;")
+        count = cur.fetchone()[0]
+        conn.close()
+        return {"ok": True, "chunks": count}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+# ── 로그인 (DB 없이 env 변수 기반) ────────────────────────────────
+@app.post("/login")
+def login(data: LoginRequest):
+    if data.username != ADMIN_ID or data.password != ADMIN_PW:
+        raise HTTPException(status_code=401, detail="아이디 또는 비밀번호가 올바르지 않습니다.")
+
+    token = jwt.encode(
+        {
+            "sub": data.username,
+            "exp": datetime.utcnow() + timedelta(hours=12)
+        },
+        SECRET_KEY,
+        algorithm="HS256"
+    )
+    return {"success": True, "token": token}
+
+
+# ── JWT 검증 의존성 ────────────────────────────────────────────────
+def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    try:
+        payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=["HS256"])
+        return payload
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="토큰이 만료되었습니다. 다시 로그인해 주세요.")
+    except Exception:
+        raise HTTPException(status_code=401, detail="인증에 실패했습니다.")
+
+
+# ── 텍스트 추출 헬퍼 ───────────────────────────────────────────────
+def _extract_text(file: UploadFile) -> str:
+    import io
+    file.file.seek(0)          # 포인터 리셋 (SpooledTemporaryFile 안전하게)
+    data  = file.file.read()
+    fname = (file.filename or "").lower()
+    ctype = (file.content_type or "").lower()
+
+    if fname.endswith(".pdf") or "pdf" in ctype:
+        try:
+            from pdfminer.high_level import extract_text
+            text = extract_text(io.BytesIO(data))
+            if text and text.strip():
+                return text.strip()
+        except Exception:
+            pass
+        raise HTTPException(400, "PDF 텍스트 추출 실패 (스캔본 제외, 텍스트 기반 PDF만 지원)")
+
+    if fname.endswith(".docx") or "wordprocessingml" in ctype:
+        from docx import Document as DocxDoc
+        doc = DocxDoc(io.BytesIO(data))
+        return "\n".join(p.text for p in doc.paragraphs if p.text.strip())
+
+    if fname.endswith(".json"):
+        try:
+            items = _json.loads(data.decode("utf-8"))
+            if isinstance(items, list):
+                parts = []
+                for item in items:
+                    if isinstance(item, dict):
+                        parts.append(" ".join(str(v) for v in item.values() if v))
+                return "\n".join(parts)
+            return _json.dumps(items, ensure_ascii=False)
+        except Exception as e:
+            raise HTTPException(400, f"JSON 파싱 실패: {e}")
+
+    # TXT 및 기타
+    for enc in ["utf-8", "cp949", "euc-kr"]:
+        try:
+            return data.decode(enc).strip()
+        except Exception:
+            continue
+    return data.decode("utf-8", errors="ignore").strip()
+
+
+def _chunk_text(text: str, max_len: int = 400) -> list[str]:
+    """단락 기준으로 청크 분할, max_len 초과 시 문장 단위 재분할"""
+    paragraphs = [p.strip() for p in _re.split(r'\n{2,}', text) if p.strip()]
+    chunks = []
+    buf = ""
+    for para in paragraphs:
+        if len(buf) + len(para) < max_len:
+            buf = (buf + "\n" + para).strip() if buf else para
+        else:
+            if buf:
+                chunks.append(buf)
+            # 단락 자체가 너무 길면 문장 단위로 자름
+            if len(para) > max_len:
+                sentences = _re.split(r'(?<=[.!?])\s+', para)
+                buf = ""
+                for s in sentences:
+                    if len(buf) + len(s) < max_len:
+                        buf = (buf + " " + s).strip() if buf else s
+                    else:
+                        if buf:
+                            chunks.append(buf)
+                        buf = s
+            else:
+                buf = para
+    if buf:
+        chunks.append(buf)
+    return [c for c in chunks if len(c) >= 20]
+
+
+# ── 규정 파일 업로드 & DB 등록 ─────────────────────────────────────
+@app.post("/upload-regulation")
+async def upload_regulation(
+    file: UploadFile = File(...),
+    payload: dict = Depends(verify_token)
+):
+    filename = file.filename or "unknown"
+
+    # 1) 텍스트 추출
+    try:
+        text = _extract_text(file)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(400, f"파일 읽기 실패: {e}")
+
+    if not text or len(text.strip()) < 10:
+        raise HTTPException(400, "파일에서 텍스트를 추출할 수 없습니다.")
+
+    # 2) 청크 분할
+    chunks = _chunk_text(text)
+    if not chunks:
+        raise HTTPException(400, "청크 분할 실패: 내용이 너무 짧습니다.")
+
+    # 3) 임베딩 생성
+    try:
+        embeddings = emb_model.encode(chunks, normalize_embeddings=True).tolist()
+    except Exception as e:
+        raise HTTPException(500, f"임베딩 생성 실패: {e}")
+
+    # 4) DB 삽입 — url 컬럼에 upload:// 태그로 식별
+    upload_tag = f"upload://{filename}"
+    inserted = 0
+    try:
+        conn = psycopg2.connect(DB_URL)
+        cur  = conn.cursor()
+
+        # id 컬럼이 TEXT 타입 — 타임스탬프 기반 고유 ID 생성
+        import time as _time
+        base_id = int(_time.time() * 1000)  # 밀리초 타임스탬프
+
+        for i, (chunk, emb) in enumerate(zip(chunks, embeddings)):
+            cur.execute("""
+                INSERT INTO rule_chunks
+                    (id, rule_title, article, department, url, content, embedding)
+                VALUES (%s, %s, %s, %s, %s, %s, %s::vector)
+            """, (
+                str(base_id + i),
+                filename,
+                f"청크 {i+1}",
+                "업로드 규정",
+                upload_tag,
+                chunk,
+                str(emb)
+            ))
+            inserted += 1
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        raise HTTPException(500, f"DB 저장 실패: {e}")
+
+    # 5) 원본 파일 로컬 백업 (텍스트는 이미 읽었으므로 data 변수 재사용)
+    os.makedirs(os.path.join(BASE_DIR, "uploads"), exist_ok=True)
+    save_path = os.path.join(BASE_DIR, "uploads", filename)
+    try:
+        file.file.seek(0)
+        with open(save_path, "wb") as f:
+            f.write(file.file.read())
+    except Exception:
+        pass  # 백업 실패는 무시 (DB 저장이 주목적)
+
+    return {"success": True, "filename": filename, "chunks": inserted}
+
+
+# ── 업로드된 규정 목록 조회 ────────────────────────────────────────
+@app.get("/uploaded-rules")
+def list_uploaded_rules(payload: dict = Depends(verify_token)):
+    try:
+        conn = psycopg2.connect(DB_URL)
+        cur  = conn.cursor()
+        cur.execute("""
+            SELECT url, COUNT(*) as cnt, MIN(id) as first_id
+            FROM rule_chunks
+            WHERE url LIKE 'upload://%'
+            GROUP BY url
+            ORDER BY first_id DESC
+        """)
+        rows = cur.fetchall()
+        conn.close()
+    except Exception as e:
+        raise HTTPException(500, f"DB 오류: {e}")
+
+    result = []
+    for row in rows:
+        tag, cnt, _ = row
+        fname = tag.replace("upload://", "")
+        result.append({"filename": fname, "chunks": cnt, "tag": tag})
+    return {"rules": result}
+
+
+# ── 업로드된 규정 삭제 ─────────────────────────────────────────────
+@app.delete("/uploaded-rules/{filename:path}")
+def delete_uploaded_rule(filename: str, payload: dict = Depends(verify_token)):
+    tag = f"upload://{filename}"
+    try:
+        conn = psycopg2.connect(DB_URL)
+        cur  = conn.cursor()
+        cur.execute("DELETE FROM rule_chunks WHERE url = %s", (tag,))
+        deleted = cur.rowcount
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        raise HTTPException(500, f"DB 삭제 실패: {e}")
+
+    if deleted == 0:
+        raise HTTPException(404, "해당 규정을 찾을 수 없습니다.")
+
+    # 로컬 백업 파일도 삭제
+    local = os.path.join(BASE_DIR, "uploads", filename)
+    if os.path.exists(local):
+        os.remove(local)
+
+    return {"success": True, "filename": filename, "deleted_chunks": deleted}
+
+
+# ── 규정 질의 ──────────────────────────────────────────────────────
+@app.post("/query", response_model=A)
+def query(req: Q):
+    q = req.question.strip()
+    if not q:
+        raise HTTPException(400, "Empty question")
+
+    try:
+        expand_resp = groq_client.chat.completions.create(
+            model=GEN_MODEL,
+            messages=[{"role": "user", "content": f"""다음 질문에서 한국 대학 규정 검색에 쓸 핵심 키워드를 추출하세요.
+동의어, 약어, 관련 법령 용어도 포함하세요. 쉼표로 구분해서 단어만 나열하세요. (예: 전과, 학과변경, 전공이동)
+
+질문: {q}
+키워드:"""}],
+            max_tokens=80,
+        )
+        extra_keywords = [k.strip() for k in expand_resp.choices[0].message.content.split(',') if k.strip()]
+    except:
+        extra_keywords = []
+
+    search_text = q + ' ' + ' '.join(extra_keywords)
+
+    try:
+        qemb = emb_model.encode(search_text, normalize_embeddings=True).tolist()
+    except Exception as e:
+        raise HTTPException(500, f"Embedding error: {e}")
+
+    try:
+        conn = psycopg2.connect(DB_URL)
+        cur  = conn.cursor()
+        cur.execute("""
+            SELECT id, rule_title, article, department, url, content,
+                   1 - (embedding <=> %s::vector) AS score
+            FROM rule_chunks
+            ORDER BY embedding <=> %s::vector
+            LIMIT %s;
+        """, (qemb, qemb, TOP_K))
+        rows = list(cur.fetchall())
+
+        raw_keywords = [w for w in (q + ' ' + ' '.join(extra_keywords)).replace("?", "").split() if len(w) >= 3]
+        keywords = list(raw_keywords)
+        for w in raw_keywords:
+            if len(w) >= 4:
+                for i in range(0, len(w)-2, 2):
+                    sub = w[i:i+3]
+                    if sub not in keywords:
+                        keywords.append(sub)
+
+        if keywords:
+            existing_ids = {r[0] for r in rows}
+            for kw in keywords:
+                cur.execute("SELECT id, rule_title, article, department, url, content, 0.85 AS score FROM rule_chunks WHERE article LIKE %s LIMIT %s", (f"%{kw}%", TOP_K))
+                for r in cur.fetchall():
+                    if r[0] not in existing_ids:
+                        rows.append(r); existing_ids.add(r[0])
+                cur.execute("SELECT id, rule_title, article, department, url, content, 0.7 AS score FROM rule_chunks WHERE content LIKE %s LIMIT %s", (f"%{kw}%", TOP_K))
+                for r in cur.fetchall():
+                    if r[0] not in existing_ids:
+                        rows.append(r); existing_ids.add(r[0])
+
+        rows = sorted(rows, key=lambda x: x[6], reverse=True)[:TOP_K]
+        conn.close()
+    except Exception as e:
+        raise HTTPException(500, f"DB error: {e}")
+
+    if not rows or rows[0][6] < 0.15:
+        return A(answer="해당 내용을 규정에서 찾지 못했습니다. 담당 부서에 문의하세요.", sources=[], found=False)
+
+    ctx    = "\n\n".join([f"[조항 {i+1}] {r[1]} {r[2]}\n{r[5]}" for i, r in enumerate(rows)])
+    prompt = f"{SYSTEM}\n\n[참고 규정 조항]\n{ctx}\n\n[사용자 질문]\n{q}\n\n[답변]"
+
+    try:
+        resp = groq_client.chat.completions.create(
+            model=GEN_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=1024,
+        )
+        answer = resp.choices[0].message.content
+    except Exception as e:
+        raise HTTPException(500, f"Generation error: {e}")
+
+    sources = [{"title": r[1], "article": r[2], "department": r[3], "url": r[4], "score": round(r[6], 3)} for r in rows]
+
+    import re as _re2
+    dept = ""; dept_phone = ""; followups = []
+
+    # ── 담당부서 추출 (📞 담당부서: 부서명 (...))
+    dept_m = _re2.search(r'📞\s*담당부서\s*:\s*([^\n(]+)', answer)
+    if dept_m:
+        dept = dept_m.group(1).strip()
+        for k, v in DEPT_PHONE.items():
+            if k in dept:
+                dept_phone = v; break
+        if not dept_phone:
+            dept_phone = "02-760-4114"
+
+    # ── 관련 질문 추출 (💡 섹션의 - 항목만)
+    fq_block = _re2.search(r'💡[^\n]*\n([\s\S]+?)(?:\n\n|$)', answer)
+    if fq_block:
+        followups = [
+            line.lstrip('- \t').strip()
+            for line in fq_block.group(1).splitlines()
+            if line.strip().startswith('-') and len(line.strip()) > 3
+        ][:4]
+
+    # ── 본문 정리: 📞 담당부서 줄과 💡 이하 전체 제거
+    clean_answer = _re2.sub(r'\n*📞[^\n]*담당부서[^\n]*', '', answer)
+    clean_answer = _re2.sub(r'\n*💡[\s\S]*', '', clean_answer)
+    # 혹시 남은 번호 레이블 제거 (1. 제목 / 2. 본문 / 3. 출처 / 4. 담당부서 / 5. 관련 질문 등)
+    clean_answer = _re2.sub(r'(?m)^\s*\d+\.\s*(제목|본문|출처|담당부서|관련\s*질문)\s*\n?', '', clean_answer)
+    clean_answer = clean_answer.strip()
+
+    return A(answer=clean_answer, sources=sources, found=True,
+             dept=dept, dept_phone=dept_phone, followups=followups)
+
+
+# ── 규정 목록 ──────────────────────────────────────────────────────
+@app.get("/rules")
+def get_rules():
+    try:
+        json_path = _Path(BASE_DIR) / "hansung_rules.json"
+        if not json_path.exists():
+            return {"chapters": [], "total": 0, "error": "hansung_rules.json not found"}
+        rules = _json.loads(json_path.read_text(encoding="utf-8"))
+        if not rules:
+            return {"chapters": [], "total": 0, "error": "Empty rules data"}
+    except Exception as e:
+        return {"chapters": [], "total": 0, "error": str(e)}
+
+    CHAP_MAP = {
+        "1": "학교법인", "2": "학칙", "3": "학사행정",
+        "4": "부속기관", "5": "부설기관", "6": "위원회",
+        "7": "산학협력단", "8": "학생군사교육단",
+    }
+    chapters = _defaultdict(list)
+    for r in rules:
+        try:
+            title    = r.get("title", "제목 없음")
+            raw_code = r.get("rule_code", "")
+            if not raw_code:
+                content = r.get("content", "")
+                code_m  = _re.search(r'(\d+)-(\d+)-(\d+)', content)
+                raw_code = f"{code_m.group(1)}-{code_m.group(2)}-{code_m.group(3)}" if code_m else ""
+            chap_num  = raw_code.split("-")[0] if raw_code else "0"
+            chap_name = CHAP_MAP.get(chap_num, "기타")
+            chap_key  = f"제{chap_num}편 {chap_name}" if chap_num != "0" else "기타"
+            chapters[chap_key].append({"seq": r.get("seq", 0), "code": raw_code, "name": title, "dept": r.get("department", ""), "url": r.get("url", "")})
+        except:
+            continue
+
+    result = []
+    for key in sorted(chapters.keys(), key=lambda x: int(_re.search(r'제(\d+)편', x).group(1)) if _re.search(r'제(\d+)편', x) else 99):
+        result.append({"chapter": key, "rules": sorted(chapters[key], key=lambda x: x["code"])})
+    return {"chapters": result, "total": sum(len(c["rules"]) for c in result)}
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8080)

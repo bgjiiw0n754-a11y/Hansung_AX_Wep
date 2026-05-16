@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>한성대학교 규정 마스터 AI</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --blue: #003087; --blue-mid: #0050B3; --blue-pale: #EEF3FB;
+  --blue-border: #C5D4ED; --bg: #F0F4FA; --white: #FFFFFF;
+  --text: #1A2340; --text-muted: #6B7A99; --border: #D1DCF0;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Noto Sans KR', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+header { background: linear-gradient(135deg, #002070 0%, #003087 50%, #0050B3 100%); position: relative; overflow: hidden; }
+header::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, #60A5FA, #93C5FD, #60A5FA); }
+.header-inner { max-width: 960px; margin: 0 auto; padding: 32px 32px 28px; display: flex; align-items: center; justify-content: space-between; position: relative; }
+.header-left { flex: 1; }
+.header-badge { display: inline-flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.2); color: #93C5FD; font-size: 10px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; padding: 4px 12px; border-radius: 20px; margin-bottom: 14px; }
+header h1 { font-size: 32px; font-weight: 700; color: #fff; line-height: 1.25; margin-bottom: 8px; letter-spacing: -0.5px; }
+header h1 span { color: #93C5FD; }
+header p { font-size: 13px; color: rgba(255,255,255,0.6); font-weight: 300; }
+.header-logo { display: flex; flex-direction: column; align-items: center; gap: 6px; flex-shrink: 0; margin-left: 32px; }
+.logo-mark { width: 100px; height: 100px; background: rgba(255,255,255,0.95); border-radius: 50%; padding: 6px; display: flex; align-items: center; justify-content: center; }
+.logo-mark img { width: 90px; height: 90px; object-fit: contain; }
+.mode-toggle { display: inline-flex; align-items: center; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 24px; padding: 3px; gap: 2px; margin-top: 16px; }
+.mode-btn { font-size: 12px; font-weight: 600; color: rgba(255,255,255,0.55); padding: 6px 16px; border-radius: 20px; cursor: pointer; transition: all 0.2s; user-select: none; }
+.mode-btn.active { background: #fff; color: var(--blue); }
+
+.nav-bar { background: #001E5C; border-bottom: 1px solid rgba(255,255,255,0.08); }
+.nav-inner { max-width: 960px; margin: 0 auto; padding: 0 32px; display: flex; align-items: center; }
+.nav-item { font-size: 13px; font-weight: 500; color: rgba(255,255,255,0.5); padding: 10px 16px; cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.15s; white-space: nowrap; }
+.nav-item.active { color: #fff; border-bottom-color: #60A5FA; }
+.nav-item:hover { color: rgba(255,255,255,0.85); }
+.nav-spacer { flex: 1; }
+
+/* 규정 업데이트 버튼 */
+#nav-update {
+  font-size: 12px; font-weight: 700; color: #93C5FD;
+  background: rgba(147,197,253,0.12); border: 1px solid rgba(147,197,253,0.3);
+  border-radius: 20px; padding: 6px 14px; margin: 6px 0;
+  cursor: pointer; transition: all 0.2s; border-bottom: none !important;
+}
+#nav-update:hover { background: rgba(147,197,253,0.25); color: #fff; }
+body:not(.mode-staff) #nav-update { display: none; }
+
+/* 앱 레이아웃 */
+.app-body { display: flex; min-height: calc(100vh - 160px); }
+
+/* 사이드바 */
+.sidebar { width: 52px; min-width: 52px; background: #fff; border-right: 1px solid #D1DCF0; transition: width 0.28s cubic-bezier(0.4,0,0.2,1); overflow: hidden; flex-shrink: 0; box-shadow: 2px 0 12px rgba(0,48,135,0.06); position: sticky; top: 0; height: 100vh; }
+.sidebar.open { width: 260px; }
+.sidebar-toggle { width: 52px; height: 52px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 18px; color: #6B7A99; border-bottom: 1px solid #D1DCF0; transition: background 0.15s; }
+.sidebar-toggle:hover { background: #EEF3FB; color: #003087; }
+.sidebar-content { opacity: 0; pointer-events: none; transition: opacity 0.15s; min-width: 260px; padding: 12px; }
+.sidebar.open .sidebar-content { opacity: 1; pointer-events: auto; transition: opacity 0.22s 0.1s; }
+.sidebar-title { font-size: 10px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: #6B7A99; margin-bottom: 10px; padding: 4px 4px 8px; border-bottom: 1px solid #D1DCF0; display: flex; justify-content: space-between; align-items: center; }
+.sidebar-clear { font-size: 10px; color: #B0BDD4; cursor: pointer; }
+.sidebar-clear:hover { color: #E24B4A; }
+.history-item { padding: 9px 10px; border-radius: 8px; cursor: pointer; margin-bottom: 4px; transition: background 0.13s; overflow: hidden; }
+.history-item:hover { background: #EEF3FB; }
+.history-item.active { background: #EEF3FB; border-left: 3px solid #003087; }
+.history-q { font-size: 12px; font-weight: 500; color: #1A2340; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.history-time { font-size: 10px; color: #6B7A99; margin-top: 2px; }
+
+main { flex: 1; min-width: 0; max-width: 960px; margin: 0 auto; padding: 28px 32px 60px; }
+.page { display: none; }
+.page.active { display: block; }
+
+/* 타이핑 커서 */
+.typing-cursor { display: inline-block; width: 2px; height: 1em; background: #003087; margin-left: 2px; vertical-align: text-bottom; animation: blink 0.8s infinite; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+/* 모드 배너 */
+.mode-banner { display: flex; align-items: center; gap: 10px; background: var(--white); border: 1px solid var(--border); border-left: 4px solid var(--blue-mid); border-radius: 10px; padding: 12px 18px; margin-bottom: 20px; font-size: 13px; color: var(--text-muted); box-shadow: 0 1px 6px rgba(0,48,135,0.05); }
+.mode-banner strong { color: var(--blue); font-weight: 700; }
+.mode-banner-icon { font-size: 18px; }
+
+/* 검색 */
+.search-card { background: var(--white); border-radius: 14px; border: 1px solid var(--border); padding: 24px; margin-bottom: 24px; box-shadow: 0 2px 16px rgba(0,48,135,0.07); }
+.search-label { font-size: 11px; font-weight: 700; color: var(--text-muted); letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+.search-label::before { content: ''; width: 3px; height: 14px; background: var(--blue-mid); border-radius: 2px; }
+.search-row { display: flex; gap: 10px; }
+textarea { flex: 1; border: 1.5px solid var(--border); border-radius: 10px; padding: 13px 16px; font-family: 'Noto Sans KR', sans-serif; font-size: 15px; resize: none; height: 80px; transition: border-color 0.2s; background: #F8FAFD; color: var(--text); line-height: 1.6; }
+textarea:focus { outline: none; border-color: var(--blue-mid); background: #fff; }
+textarea::placeholder { color: #B0BDD4; }
+#askBtn { background: linear-gradient(150deg, #003087, #0060CC); color: #fff; border: none; border-radius: 10px; padding: 0 24px; font-family: 'Noto Sans KR', sans-serif; font-size: 15px; font-weight: 700; cursor: pointer; transition: all 0.2s; white-space: nowrap; min-width: 80px; }
+#askBtn:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(0,48,135,0.35); }
+#askBtn:disabled { opacity: 0.55; cursor: not-allowed; transform: none; box-shadow: none; }
+.chips { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 7px; }
+.chip { background: var(--blue-pale); border: 1px solid var(--blue-border); border-radius: 20px; padding: 5px 13px; font-size: 12px; font-weight: 500; color: var(--blue); cursor: pointer; transition: all 0.15s; }
+.chip:hover { background: var(--blue); color: #fff; border-color: var(--blue); }
+
+#loading { display: none; text-align: center; padding: 40px; color: var(--text-muted); font-size: 13px; }
+.spinner { width: 32px; height: 32px; border: 2.5px solid var(--border); border-top-color: var(--blue-mid); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 10px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.answer-card { background: var(--white); border-radius: 14px; border: 1px solid var(--border); overflow: hidden; margin-bottom: 16px; animation: fadeUp 0.3s ease; box-shadow: 0 2px 16px rgba(0,48,135,0.06); }
+@keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+.answer-header { background: linear-gradient(90deg, #EEF3FB, #F5F8FD); padding: 14px 22px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 12px; }
+.answer-icon { width: 32px; height: 32px; background: var(--blue-mid); border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 14px; flex-shrink: 0; }
+.answer-htxt { font-size: 13px; color: var(--text-muted); }
+.answer-htxt strong { display: block; font-size: 14px; font-weight: 700; color: var(--text); }
+.answer-body { padding: 22px; font-size: 15px; line-height: 1.95; white-space: pre-wrap; color: var(--text); }
+.answer-body.nf { color: #9EADC8; font-style: italic; }
+
+.sources { padding: 0 22px 22px; }
+.src-label { font-size: 10px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--text-muted); margin-bottom: 10px; }
+.src-item { display: flex; align-items: flex-start; gap: 10px; padding: 11px 14px; background: #F8FAFD; border: 1px solid var(--border); border-radius: 9px; margin-bottom: 7px; transition: border-color 0.15s; }
+.src-item:hover { border-color: var(--blue-mid); }
+.src-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--blue-mid); margin-top: 5px; flex-shrink: 0; }
+.src-title { font-size: 13px; font-weight: 700; color: var(--text); }
+.src-meta { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+.src-score { margin-left: auto; font-size: 10px; font-weight: 700; color: var(--blue-mid); background: var(--blue-pale); padding: 2px 8px; border-radius: 8px; white-space: nowrap; }
+.src-link { font-size: 11px; color: var(--blue-mid); text-decoration: none; margin-top: 3px; display: block; }
+.src-link:hover { text-decoration: underline; }
+
+.err { background: #FFF5F5; border: 1px solid #FFC5C5; border-radius: 10px; padding: 14px 18px; color: #C0392B; font-size: 13px; margin-bottom: 16px; }
+.empty { text-align: center; padding: 56px 24px; color: var(--text-muted); }
+.empty-icon { font-size: 40px; margin-bottom: 14px; opacity: 0.35; }
+.empty p { font-size: 14px; line-height: 1.8; }
+
+/* 담당부서 */
+.dept-card { display: flex; align-items: center; gap: 14px; padding: 14px 18px; background: #EEF3FB; border: 1px solid #C5D4ED; border-radius: 12px; }
+.dept-icon { width: 38px; height: 38px; background: #003087; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 18px; flex-shrink: 0; }
+.dept-info { flex: 1; }
+.dept-name { font-size: 13px; font-weight: 700; color: #1A2340; }
+.dept-phone { font-size: 12px; color: #6B7A99; margin-top: 2px; }
+.dept-call-btn { padding: 8px 16px; background: #003087; color: #fff; border: none; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; font-family: 'Noto Sans KR', sans-serif; white-space: nowrap; }
+.dept-call-btn:hover { background: #0050B3; }
+
+/* 추가질문 */
+.followup-section { padding: 16px 22px; border-top: 1px solid #D1DCF0; }
+.followup-label { font-size: 12px; font-weight: 700; color: #003087; margin-bottom: 10px; }
+.followup-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.followup-item { display: flex; align-items: center; gap: 8px; padding: 10px 13px; background: #F8FAFD; border: 1.5px solid #D1DCF0; border-radius: 10px; cursor: pointer; font-size: 12px; font-weight: 500; color: #1A2340; transition: all 0.15s; }
+.followup-item:hover { border-color: #003087; background: #EEF3FB; color: #003087; }
+.followup-item span:first-child { flex: 1; line-height: 1.5; }
+.followup-arrow { color: #C5D4ED; font-size: 14px; flex-shrink: 0; }
+.followup-item:hover .followup-arrow { color: #003087; }
+
+/* 규정 목록 */
+.rules-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+.rules-title { font-size: 18px; font-weight: 700; color: var(--text); }
+.rules-count { font-size: 13px; color: var(--text-muted); background: var(--blue-pale); padding: 4px 12px; border-radius: 20px; border: 1px solid var(--blue-border); }
+.rules-search { display: flex; align-items: center; gap: 10px; background: var(--white); border: 1px solid var(--border); border-radius: 10px; padding: 10px 16px; margin-bottom: 20px; box-shadow: 0 1px 6px rgba(0,48,135,0.05); }
+.rules-search input { flex: 1; border: none; outline: none; font-family: 'Noto Sans KR', sans-serif; font-size: 14px; color: var(--text); background: transparent; }
+.rules-search input::placeholder { color: #B0BDD4; }
+.rules-search-icon { color: var(--text-muted); font-size: 16px; }
+.chapter-block { background: var(--white); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 12px; overflow: hidden; box-shadow: 0 1px 6px rgba(0,48,135,0.04); }
+.chapter-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; cursor: pointer; transition: background 0.15s; user-select: none; }
+.chapter-header:hover { background: #F8FAFD; }
+.chapter-left { display: flex; align-items: center; gap: 12px; }
+.chapter-num { width: 32px; height: 32px; background: var(--blue); color: #fff; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex-shrink: 0; }
+.chapter-name { font-size: 15px; font-weight: 700; color: var(--text); }
+.chapter-right { display: flex; align-items: center; gap: 10px; }
+.chapter-cnt { font-size: 12px; color: var(--text-muted); background: var(--blue-pale); padding: 3px 10px; border-radius: 12px; }
+.chapter-arrow { font-size: 12px; color: var(--text-muted); transition: transform 0.2s; }
+.chapter-block.open .chapter-arrow { transform: rotate(180deg); }
+.rule-list { border-top: 1px solid var(--border); display: none; }
+.chapter-block.open .rule-list { display: block; }
+.rule-item { display: flex; align-items: center; gap: 14px; padding: 12px 20px; border-bottom: 1px solid #F0F4FA; transition: background 0.1s; }
+.rule-item:last-child { border-bottom: none; }
+.rule-item:hover { background: #F8FAFD; }
+.rule-code { font-size: 11px; font-weight: 700; color: var(--blue-mid); background: var(--blue-pale); padding: 3px 8px; border-radius: 6px; white-space: nowrap; flex-shrink: 0; }
+.rule-name { font-size: 14px; color: var(--text); flex: 1; }
+.rule-dept { font-size: 11px; color: var(--text-muted); white-space: nowrap; }
+.rule-link { font-size: 11px; color: var(--blue-mid); text-decoration: none; white-space: nowrap; }
+.rule-link:hover { text-decoration: underline; }
+.rules-loading { text-align: center; padding: 40px; color: var(--text-muted); font-size: 13px; }
+.no-result { text-align: center; padding: 40px; color: var(--text-muted); font-size: 14px; }
+
+/* 교직원 도구 */
+#nav-teacher { display: none; }
+body.mode-staff #nav-teacher { display: block; }
+.upload-zone { border: 2px dashed #C5D4ED; border-radius: 14px; background: #fff; padding: 48px 24px; text-align: center; cursor: pointer; transition: all 0.2s; margin-bottom: 20px; }
+.upload-zone:hover, .upload-zone.drag { border-color: #0050B3; background: #EEF3FB; }
+.upload-zone-icon { font-size: 40px; margin-bottom: 12px; }
+.upload-zone p { font-size: 14px; color: #6B7A99; line-height: 1.8; }
+.conflict-loading { display: none; text-align: center; padding: 40px; color: #6B7A99; font-size: 13px; }
+.conflict-card { background: #fff; border-radius: 14px; border: 1px solid #D1DCF0; overflow: hidden; margin-bottom: 16px; box-shadow: 0 2px 16px rgba(0,48,135,0.06); animation: fadeUp 0.3s ease; }
+.conflict-header { background: linear-gradient(90deg, #EEF3FB, #F5F8FD); padding: 14px 22px; border-bottom: 1px solid #D1DCF0; display: flex; align-items: center; gap: 12px; }
+.conflict-icon { width: 32px; height: 32px; background: #E24B4A; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 16px; flex-shrink: 0; }
+.conflict-summary { padding: 18px 22px; font-size: 14px; line-height: 1.9; color: #1A2340; border-bottom: 1px solid #D1DCF0; }
+.conflict-list { padding: 16px 22px; }
+.conflict-item { display: flex; gap: 12px; padding: 12px 14px; border-radius: 10px; border: 1px solid #D1DCF0; margin-bottom: 8px; background: #F8FAFD; }
+.conflict-item:last-child { margin-bottom: 0; }
+.severity { font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 6px; white-space: nowrap; flex-shrink: 0; margin-top: 2px; }
+.sev-high { background: #FCEBEB; color: #A32D2D; }
+.sev-mid  { background: #FAEEDA; color: #633806; }
+.sev-low  { background: #EAF3DE; color: #27500A; }
+.conflict-detail .reg { font-size: 13px; font-weight: 700; color: #1A2340; }
+.conflict-detail .art { font-size: 11px; color: #6B7A99; margin-top: 1px; }
+.conflict-detail .iss { font-size: 13px; color: #1A2340; margin-top: 6px; line-height: 1.7; }
+.conflict-rec { padding: 16px 22px; background: #EEF3FB; border-top: 1px solid #D1DCF0; font-size: 13px; line-height: 1.8; }
+.conflict-rec strong { color: #003087; display: block; margin-bottom: 4px; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; }
+.export-bar { display: flex; gap: 8px; padding: 12px 22px; border-top: 1px solid #D1DCF0; background: #F8FAFD; }
+.export-btn { display: flex; align-items: center; gap: 6px; padding: 7px 16px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; border: 1.5px solid #C5D4ED; background: #fff; color: #003087; transition: all 0.15s; font-family: 'Noto Sans KR', sans-serif; }
+.export-btn:hover { background: #003087; color: #fff; border-color: #003087; }
+.export-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+
+@media (max-width:640px) {
+  header h1 { font-size: 26px; }
+  .header-logo { display: none; }
+  .search-row { flex-direction: column; }
+  #askBtn { height: 46px; }
+  main { padding: 20px 16px 60px; }
+  .header-inner { padding: 24px 16px 20px; }
+  .rule-dept { display: none; }
+  .followup-grid { grid-template-columns: 1fr; }
+
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <div class="header-left">
+      <div class="header-badge">AI-Powered · Regulation Master</div>
+      <h1>한성대학교<br><span>규정 마스터</span></h1>
+      <p>규정 기반으로만 답변합니다 · 근거 조항을 명시합니다</p>
+      <div class="mode-toggle">
+        <div class="mode-btn active" id="btnStaff" onclick="setMode('staff')">👔 교직원</div>
+        <div class="mode-btn" id="btnStudent" onclick="setMode('student')">🎓 학생</div>
+      </div>
+    </div>
+    <div class="header-logo">
+      <div class="logo-mark"><img src="/HSU_logo.png" alt="한성대학교"></div>
+    </div>
+  </div>
+</header>
+
+<div class="nav-bar">
+  <div class="nav-inner">
+    <div class="nav-item active" onclick="showPage('search', this)">규정 검색</div>
+    <div class="nav-item" onclick="showPage('list', this)">규정 목록</div>
+    <div class="nav-item" id="nav-teacher" onclick="showPage('teacher', this)">📋 교직원 도구</div>
+    <div class="nav-spacer"></div>
+    <div class="nav-item" id="nav-update" onclick="window.location.href='/login-page'">🔄 규정 업데이트</div>
+  </div>
+</div>
+
+<!-- 앱 바디 -->
+<div class="app-body">
+
+  <!-- 사이드바 -->
+  <div class="sidebar" id="sidebar">
+    <div class="sidebar-toggle" onclick="toggleSidebar()">
+      <span id="sidebarIcon">☰</span>
+    </div>
+    <div class="sidebar-content" id="sidebarContent">
+      <div class="sidebar-title">
+        <span>대화 내역</span>
+        <span class="sidebar-clear" onclick="clearHistory()">전체 삭제</span>
+      </div>
+      <div id="historyList"></div>
+    </div>
+  </div>
+
+  <main>
+    <!-- 검색 페이지 -->
+    <div class="page active" id="page-search">
+      <div class="mode-banner" id="modeBanner">
+        <span class="mode-banner-icon">👔</span>
+        <span><strong>교직원 모드</strong> · 복무, 급여, 임용, 징계 등 교직원 관련 규정을 검색합니다.</span>
+      </div>
+      <div class="search-card">
+        <div class="search-label">규정 질문</div>
+        <div class="search-row">
+          <textarea id="questionInput" placeholder="예: 교직원 연가는 몇 일인가요?"></textarea>
+          <button id="askBtn" onclick="ask()">질문</button>
+        </div>
+        <div class="chips" id="chipArea"></div>
+      </div>
+      <div id="loading"><div class="spinner"></div>규정을 검색하고 있습니다…</div>
+      <div id="result">
+        <div class="empty"><div class="empty-icon">📜</div><p>질문을 입력하면<br>관련 규정을 찾아 근거와 함께 답변합니다.</p></div>
+      </div>
+    </div>
+
+    <!-- 교직원 도구 페이지 -->
+    <div class="page" id="page-teacher">
+      <div class="mode-banner">
+        <span class="mode-banner-icon">📋</span>
+        <span><strong>교직원 도구</strong> · 문서를 업로드하면 기존 규정과 충돌을 자동 분석합니다.</span>
+      </div>
+      <div class="upload-zone" id="uploadZone"
+           onclick="document.getElementById('conflictFileInput').click()"
+           ondragover="event.preventDefault();this.classList.add('drag')"
+           ondragleave="this.classList.remove('drag')"
+           ondrop="handleDrop(event)">
+        <input type="file" id="conflictFileInput" accept=".pdf,.docx,.txt" style="display:none" onchange="handleFileSelect(this)">
+        <div class="upload-zone-icon">📄</div>
+        <p><strong>클릭하거나 파일을 드래그하세요</strong><br>PDF · DOCX · TXT 지원</p>
+      </div>
+      <div class="conflict-loading" id="conflictLoading"><div class="spinner"></div>규정과 비교 분석 중...</div>
+      <div id="conflictResult"></div>
+    </div>
+
+    <!-- 규정 목록 페이지 -->
+    <div class="page" id="page-list">
+      <div class="rules-header">
+        <div class="rules-title">전체 규정 목록</div>
+        <div class="rules-count" id="rulesCount">로딩 중...</div>
+      </div>
+      <div class="rules-search">
+        <span class="rules-search-icon">🔍</span>
+        <input type="text" id="ruleSearch" placeholder="규정명 또는 담당부서 검색..." oninput="filterRules()">
+      </div>
+      <div id="rulesList"><div class="rules-loading"><div class="spinner"></div>규정 목록을 불러오는 중...</div></div>
+    </div>
+  </main>
+
+</div><!-- /.app-body -->
+
+
+
+
+<script>
+const API = "";
+let rulesData = null;
+
+
+/* ── 페이지 전환 ── */
+function showPage(name, el) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  el.classList.add('active');
+  if (name === 'list' && !rulesData) loadRules();
+}
+
+
+/* ── 사이드바 & 히스토리 ── */
+const chatHistory = [];
+let messages = [{ role: 'system', content: '한성대학교 규정 기반 AI 챗봇' }];
+let currentChatId = null;
+
+function toggleSidebar() {
+  const sb = document.getElementById('sidebar');
+  sb.classList.toggle('open');
+  document.getElementById('sidebarIcon').textContent = sb.classList.contains('open') ? '✕' : '☰';
+}
+
+function addToHistory(question, msgs) {
+  const now = new Date();
+  const time = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
+  const item = { id: Date.now(), q: question, messages: msgs, time };
+  chatHistory.unshift(item);
+  currentChatId = item.id;
+  renderHistory();
+  if (chatHistory.length === 1) {
+    document.getElementById('sidebar').classList.add('open');
+    document.getElementById('sidebarIcon').textContent = '✕';
+  }
+}
+
+function renderHistory() {
+  const list = document.getElementById('historyList');
+  if (!chatHistory.length) {
+    list.innerHTML = '<div style="font-size:12px;color:#B0BDD4;text-align:center;padding:20px 0">아직 질문이 없습니다</div>';
+    return;
+  }
+  list.innerHTML = chatHistory.map(item => `
+    <div class="history-item ${currentChatId === item.id ? 'active' : ''}" onclick="restoreHistory(${item.id})">
+      <div class="history-q">${item.q.length>30 ? item.q.slice(0,30)+'…' : item.q}</div>
+      <div class="history-time">${item.time}</div>
+    </div>`).join('');
+}
+
+function restoreHistory(id) {
+  const item = chatHistory.find(v => v.id === id);
+  if (!item) return;
+  currentChatId = id;
+  messages = structuredClone(item.messages);
+  const lastUser = [...messages].reverse().find(v => v.role === 'user');
+  const lastAss  = [...messages].reverse().find(v => v.role === 'assistant');
+  if (lastUser) document.getElementById('questionInput').value = lastUser.content;
+  if (lastAss)  renderAnswer(lastUser?.content || '', { answer: lastAss.content, found: true, followups: [], sources: [] });
+  renderHistory();
+  showPage('search', document.querySelectorAll('.nav-item')[0]);
+}
+
+function clearHistory() {
+  if (!chatHistory.length) return;
+  if (!confirm('대화 내역을 모두 삭제하시겠습니까?')) return;
+  chatHistory.length = 0; currentChatId = null;
+  messages = [{ role: 'system', content: '한성대학교 규정 기반 AI 챗봇' }];
+  renderHistory();
+  document.getElementById('result').innerHTML = '<div class="empty"><div class="empty-icon">📜</div><p>질문을 입력하면<br>관련 규정을 찾아 근거와 함께 답변합니다.</p></div>';
+}
+
+renderHistory();
+
+/* ── 타이핑 애니메이션 ── */
+function typeText(el, text, speed = 12) {
+  return new Promise(resolve => {
+    el.innerHTML = '<span class="typing-cursor"></span>';
+    const cursor = el.querySelector('.typing-cursor');
+    let i = 0;
+    function next() {
+      if (i >= text.length) { cursor.remove(); resolve(); return; }
+      const ch = text[i++];
+      if (ch === '\n') cursor.insertAdjacentHTML('beforebegin', '<br>');
+      else cursor.insertAdjacentText('beforebegin', ch);
+      setTimeout(next, speed);
+    }
+    next();
+  });
+}
+
+/* ── 모드 ── */
+const MODES = {
+  staff: {
+    banner: "👔", bannerLabel: "교직원 모드",
+    desc: "복무, 급여, 임용, 징계 등 교직원 관련 규정을 검색합니다.",
+    placeholder: "예: 교직원 연가는 몇 일인가요?",
+    chips: ["연가 일수는?", "초과근무수당 지급 기준은?", "교원 임용 절차는?", "휴직 사유와 기간은?", "징계 종류는?", "퇴직금 지급 기준은?"]
+  },
+  student: {
+    banner: "🎓", bannerLabel: "학생 모드",
+    desc: "학사, 장학, 졸업, 수강 등 학생 관련 규정을 검색합니다.",
+    placeholder: "예: 졸업 이수 학점은 몇 학점인가요?",
+    chips: ["졸업 이수 학점은?", "장학금 신청 기준은?", "휴학 가능 기간은?", "성적 이의신청 방법은?", "전공 변경 절차는?", "복학 신청 방법은?"]
+  }
+};
+let currentMode = 'staff';
+
+function setMode(mode) {
+  currentMode = mode;
+  const m = MODES[mode];
+  document.getElementById('btnStaff').classList.toggle('active', mode === 'staff');
+  document.getElementById('btnStudent').classList.toggle('active', mode === 'student');
+  document.getElementById('modeBanner').innerHTML = `<span class="mode-banner-icon">${m.banner}</span><span><strong>${m.bannerLabel}</strong> · ${m.desc}</span>`;
+  document.getElementById('questionInput').placeholder = m.placeholder;
+  document.getElementById('chipArea').innerHTML = m.chips.map(c => `<span class="chip" onclick="setQ(this)">${c}</span>`).join('');
+  document.body.className = mode === 'staff' ? 'mode-staff' : '';
+  if (mode === 'student') {
+    const t = document.getElementById('nav-teacher');
+    if (t && t.classList.contains('active')) document.querySelector('.nav-item').click();
+  }
+}
+
+/* ── 규정 목록 ── */
+async function loadRules() {
+  try {
+    const res = await fetch(`${API}/rules`);
+    const data = await res.json();
+    rulesData = data;
+    document.getElementById('rulesCount').textContent = `총 ${data.total}개 규정`;
+    renderRules(data.chapters);
+  } catch(e) {
+    document.getElementById('rulesList').innerHTML = `<div class="no-result">규정 목록을 불러오지 못했습니다.<br><small>${e.message}</small></div>`;
+  }
+}
+
+function renderRules(chapters) {
+  const container = document.getElementById('rulesList');
+  if (!chapters.length) { container.innerHTML = '<div class="no-result">표시할 규정이 없습니다.</div>'; return; }
+  container.innerHTML = chapters.map((ch, idx) => {
+    const num = ch.chapter.match(/제(\d+)편/)?.[1] || idx+1;
+    const rows = ch.rules.map(r => `
+      <div class="rule-item"><span class="rule-code">${r.code}</span>
+        <span class="rule-name">${r.name}</span><span class="rule-dept">${r.dept}</span>
+        ${r.url ? `<a class="rule-link" href="${r.url}" target="_blank">원문 →</a>` : ''}
+      </div>`).join('');
+    return `<div class="chapter-block" id="ch-${idx}">
+      <div class="chapter-header" onclick="toggleChapter(${idx})">
+        <div class="chapter-left"><div class="chapter-num">${num}</div><div class="chapter-name">${ch.chapter}</div></div>
+        <div class="chapter-right"><span class="chapter-cnt">${ch.rules.length}개</span><span class="chapter-arrow">▼</span></div>
+      </div>
+      <div class="rule-list">${rows}</div>
+    </div>`;
+  }).join('');
+}
+
+function toggleChapter(idx) { document.getElementById('ch-' + idx).classList.toggle('open'); }
+
+function filterRules() {
+  const q = document.getElementById('ruleSearch').value.trim().toLowerCase();
+  if (!rulesData) return;
+  if (!q) { renderRules(rulesData.chapters); return; }
+  const filtered = rulesData.chapters.map(ch => ({
+    ...ch, rules: ch.rules.filter(r => (r.name + r.dept + r.code).toLowerCase().includes(q))
+  })).filter(ch => ch.rules.length > 0);
+  renderRules(filtered);
+  document.querySelectorAll('.chapter-block').forEach(b => b.classList.add('open'));
+  document.getElementById('rulesCount').textContent = `${filtered.reduce((a,c)=>a+c.rules.length,0)}개 검색됨`;
+}
+
+/* ── 질문 & 답변 ── */
+function setQ(el) { document.getElementById('questionInput').value = el.textContent; document.getElementById('questionInput').focus(); }
+document.getElementById('questionInput').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ask(); } });
+
+async function ask() {
+  const q = document.getElementById('questionInput').value.trim();
+  if (!q) return;
+  const btn = document.getElementById('askBtn');
+  const loading = document.getElementById('loading');
+  const result = document.getElementById('result');
+  btn.disabled = true; loading.style.display = 'block'; result.innerHTML = '';
+  result.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  try {
+    messages.push({ role: 'user', content: q });
+    const res = await fetch(`${API}/query`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question: q, messages: messages })
+    });
+    if (!res.ok) { const err = await res.json(); throw new Error(err.detail || '서버 오류'); }
+    const data = await res.json();
+    messages.push({ role: 'assistant', content: data.answer });
+    addToHistory(q, structuredClone(messages));
+    renderAnswer(q, data);
+  } catch(e) {
+    result.innerHTML = `<div class="err">오류: ${e.message}<br><small>서버가 실행 중인지 확인하세요 (uvicorn server:app --reload)</small></div>`;
+  } finally { btn.disabled = false; loading.style.display = 'none'; }
+}
+
+async function setFollowup(q) {
+  document.getElementById('questionInput').value = q;
+  document.getElementById('questionInput').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  await ask();
+}
+
+function renderAnswer(question, data) {
+  const result = document.getElementById('result');
+  const truncQ = question.length > 40 ? question.slice(0,40) + '…' : question;
+
+  let src = '';
+  if (data.sources && data.sources.length > 0) {
+    src = `<div class="sources"><div class="src-label">참조 조항</div>${data.sources.map(s => `
+      <div class="src-item"><div class="src-dot"></div>
+        <div><div class="src-title">${s.title||'규정'}</div>
+        <div class="src-meta">${s.article||''}${s.department?' · '+s.department:''}</div>
+        ${s.url?`<a class="src-link" href="${s.url}" target="_blank">원문 보기 →</a>`:''}</div>
+        <span class="src-score">유사도 ${Math.round(s.score*100)}%</span>
+      </div>`).join('')}</div>`;
+  }
+
+  let deptHtml = '';
+  if (data.dept) {
+    const phone = data.dept_phone || '02-760-4114';
+    deptHtml = `<div style="padding:14px 22px 0">
+      <div class="dept-card"><div class="dept-icon">📞</div>
+        <div class="dept-info"><div class="dept-name">${data.dept}</div><div class="dept-phone">${phone}</div></div>
+        <button class="dept-call-btn" onclick="alert('담당부서: ${data.dept}\\n전화번호: ${phone}')">연결 안내</button>
+      </div></div>`;
+  }
+
+  let followupHtml = '';
+  if (data.followups && data.followups.length > 0) {
+    const items = data.followups.slice(0,4).map(q =>
+      `<div class="followup-item" onclick="setFollowup(this.dataset.q)" data-q="${q.replace(/"/g,'&quot;')}">
+        <span>${q}</span><span class="followup-arrow">›</span></div>`).join('');
+    followupHtml = `<div class="followup-section"><div class="followup-label">💡 이런 것도 궁금하신가요?</div>
+      <div class="followup-grid">${items}</div></div>`;
+  }
+
+  const exportBar = data.found ? `<div class="export-bar">
+    <button class="export-btn" onclick="exportAnswer('pdf', this)">⬇ PDF</button>
+    <button class="export-btn" onclick="exportAnswer('docx', this)">⬇ Word</button>
+  </div>` : '';
+
+  result.innerHTML = `<div class="answer-card">
+    <div class="answer-header">
+      <div class="answer-icon">⚖</div>
+      <div class="answer-htxt"><strong>${truncQ}</strong>규정 기반 AI 답변</div>
+    </div>
+    <div class="answer-body${!data.found?' nf':''}" id="typingBody"></div>
+    <div id="answerExtras" style="display:none">${src}${deptHtml}${followupHtml}${exportBar}</div>
+  </div>`;
+
+  typeText(document.getElementById('typingBody'), data.answer, 12).then(() => {
+    const extras = document.getElementById('answerExtras');
+    if (extras) { extras.style.display = ''; extras.style.animation = 'fadeUp 0.3s ease'; }
+  });
+
+  window._lastAnswer = { ...data, question };
+}
+
+async function exportAnswer(fmt, btn) {
+  const data = window._lastAnswer;
+  if (!data) { alert('먼저 질문을 해주세요.'); return; }
+  const origText = btn.textContent;
+  btn.disabled = true; btn.textContent = '생성 중...';
+  try {
+    const res = await fetch(`${API}/export/${fmt}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: '규정 답변 리포트', content: data.answer, sources: data.sources || [], question: data.question || '' })
+    });
+    if (!res.ok) throw new Error(`서버 오류 (${res.status})`);
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url;
+    a.download = fmt === 'pdf' ? 'hansung_report.pdf' : 'hansung_report.docx';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch(e) { alert('내보내기 실패: ' + e.message); }
+  finally { btn.disabled = false; btn.textContent = origText; }
+}
+
+/* ── 충돌 분석 ── */
+function handleDrop(e) {
+  e.preventDefault(); document.getElementById('uploadZone').classList.remove('drag');
+  const file = e.dataTransfer.files[0]; if (file) uploadConflict(file);
+}
+function handleFileSelect(input) { if (input.files[0]) uploadConflict(input.files[0]); }
+async function uploadConflict(file) {
+  const loading = document.getElementById('conflictLoading');
+  const result  = document.getElementById('conflictResult');
+  loading.style.display = 'block'; result.innerHTML = '';
+  const form = new FormData(); form.append('file', file);
+  try {
+    const res = await fetch(`${API}/conflict/`, { method: 'POST', body: form });
+    if (!res.ok) { const e = await res.json(); throw new Error(e.detail||'분석 실패'); }
+    renderConflict(await res.json());
+  } catch(e) { result.innerHTML = `<div class="err">오류: ${e.message}</div>`; }
+  finally { loading.style.display = 'none'; }
+}
+function renderConflict(data) {
+  const sevCls = {'높음':'sev-high','보통':'sev-mid','낮음':'sev-low'};
+  const items = (data.conflicts||[]).map(c => `
+    <div class="conflict-item">
+      <span class="severity ${sevCls[c.severity]||'sev-mid'}">${c.severity}</span>
+      <div class="conflict-detail">
+        <div class="reg">${c.regulation}</div><div class="art">${c.article}</div>
+        <div class="iss">${c.issue}</div>
+      </div>
+    </div>`).join('') || '<p style="color:#6B7A99;font-size:14px">충돌 항목 없음</p>';
+  document.getElementById('conflictResult').innerHTML = `
+    <div class="conflict-card">
+      <div class="conflict-header"><div class="conflict-icon">⚡</div>
+        <div><strong style="font-size:14px;color:#1A2340">${data.filename}</strong>
+          <div style="font-size:12px;color:#6B7A99;margin-top:2px">충돌 ${data.conflicts?.length||0}건 발견</div></div>
+      </div>
+      <div class="conflict-summary">${data.summary}</div>
+      <div class="conflict-list"><div class="src-label" style="margin-bottom:10px">충돌 항목</div>${items}</div>
+      <div class="conflict-rec"><strong>💡 권고사항</strong>${data.recommendations}</div>
+    </div>`;
+}
+
+/* ── 초기화 ── */
+setMode('staff');
+</script>
+</body>
+</html>

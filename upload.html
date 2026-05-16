@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>규정 파일 업로드 — 한성대학교 규정 마스터</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Noto Sans KR', sans-serif; background: #F0F4FA; color: #1A2340; min-height: 100vh; padding-bottom: 60px; }
+
+header { width: 100%; background: linear-gradient(135deg, #002070, #003087, #0050B3); padding: 18px 32px; display: flex; align-items: center; gap: 16px; }
+header a { color: rgba(255,255,255,0.6); font-size: 13px; text-decoration: none; }
+header a:hover { color: #fff; }
+header .sep { color: rgba(255,255,255,0.3); }
+header .cur { color: #fff; font-weight: 600; font-size: 13px; }
+
+.wrap { max-width: 560px; margin: 40px auto; padding: 0 16px; }
+.card { background: #fff; border-radius: 20px; padding: 36px 40px; box-shadow: 0 8px 40px rgba(0,48,135,0.10); margin-bottom: 24px; }
+.card-title { font-size: 20px; font-weight: 700; color: #003087; margin-bottom: 4px; }
+.card-sub { font-size: 13px; color: #6B7A99; margin-bottom: 24px; }
+.user-badge { display: inline-flex; align-items: center; gap: 8px; background: #EEF3FB; border: 1px solid #C5D4ED; border-radius: 20px; padding: 5px 14px; font-size: 12px; font-weight: 600; color: #003087; margin-bottom: 20px; }
+
+/* 드롭존 */
+.file-zone { border: 2px dashed #C5D4ED; border-radius: 14px; background: #F8FAFD; padding: 40px 24px; text-align: center; cursor: pointer; transition: all 0.2s; margin-bottom: 16px; }
+.file-zone:hover, .file-zone.drag { border-color: #0050B3; background: #EEF3FB; }
+.file-zone-icon { font-size: 36px; margin-bottom: 10px; }
+.file-zone p { font-size: 14px; color: #6B7A99; line-height: 1.8; }
+.file-zone p strong { color: #1A2340; }
+.file-ext { font-size: 11px; color: #B0BDD4; margin-top: 4px; }
+
+/* 선택된 파일 목록 */
+.file-list { margin-bottom: 16px; display: none; }
+.file-list-title { font-size: 11px; font-weight: 700; color: #6B7A99; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 8px; }
+.file-row { display: flex; align-items: center; gap: 10px; padding: 9px 12px; background: #F8FAFD; border: 1px solid #D1DCF0; border-radius: 10px; margin-bottom: 6px; transition: all 0.2s; }
+.file-row.uploading { border-color: #93C5FD; background: #EEF3FB; }
+.file-row.done     { border-color: #B8DFA0; background: #F0FAE8; }
+.file-row.error    { border-color: #FFC5C5; background: #FFF5F5; }
+.file-row-icon { font-size: 16px; flex-shrink: 0; }
+.file-row-name { flex: 1; font-size: 13px; font-weight: 500; color: #1A2340; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-row-status { font-size: 11px; font-weight: 600; white-space: nowrap; flex-shrink: 0; }
+.file-row.uploading .file-row-status { color: #0050B3; }
+.file-row.done     .file-row-status { color: #27500A; }
+.file-row.error    .file-row-status { color: #C0392B; }
+.file-row-remove { width: 20px; height: 20px; border: none; background: none; cursor: pointer; font-size: 14px; color: #B0BDD4; flex-shrink: 0; padding: 0; line-height: 1; }
+.file-row-remove:hover { color: #C0392B; }
+
+/* 전체 진행바 */
+.progress-wrap { display: none; margin-bottom: 14px; }
+.progress-label { display: flex; justify-content: space-between; font-size: 12px; color: #6B7A99; margin-bottom: 6px; }
+.progress-bar { height: 6px; background: #E8EEF8; border-radius: 4px; overflow: hidden; }
+.progress-fill { height: 100%; background: linear-gradient(90deg, #003087, #0060CC); border-radius: 4px; transition: width 0.3s ease; width: 0%; }
+
+.upload-btn { width: 100%; height: 50px; border: none; border-radius: 12px; background: linear-gradient(150deg, #003087, #0060CC); color: #fff; font-weight: 700; font-size: 15px; cursor: pointer; font-family: 'Noto Sans KR', sans-serif; transition: all 0.2s; }
+.upload-btn:hover { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(0,48,135,0.3); }
+.upload-btn:disabled { opacity: 0.55; cursor: not-allowed; transform: none; box-shadow: none; }
+
+.summary-msg { margin-top: 14px; font-size: 13px; text-align: center; padding: 10px 16px; border-radius: 10px; display: none; }
+.summary-msg.ok  { background: #EAF3DE; color: #27500A; border: 1px solid #B8DFA0; display: block; }
+.summary-msg.err { background: #FFF5F5; color: #C0392B; border: 1px solid #FFC5C5; display: block; }
+
+/* 업로드된 규정 목록 */
+.list-card { background: #fff; border-radius: 20px; padding: 36px 40px; box-shadow: 0 8px 40px rgba(0,48,135,0.10); }
+.list-title { font-size: 18px; font-weight: 700; color: #003087; margin-bottom: 4px; }
+.list-sub { font-size: 13px; color: #6B7A99; margin-bottom: 20px; }
+.rule-row { display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: #F8FAFD; border: 1px solid #D1DCF0; border-radius: 12px; margin-bottom: 8px; transition: border-color 0.15s; }
+.rule-row:hover { border-color: #0050B3; }
+.rule-icon { font-size: 20px; flex-shrink: 0; }
+.rule-info { flex: 1; min-width: 0; }
+.rule-name { font-size: 13px; font-weight: 700; color: #1A2340; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rule-meta { font-size: 11px; color: #6B7A99; margin-top: 2px; }
+.del-btn { flex-shrink: 0; padding: 6px 14px; border: 1.5px solid #FFC5C5; border-radius: 8px; background: #fff; color: #C0392B; font-size: 12px; font-weight: 600; cursor: pointer; font-family: 'Noto Sans KR', sans-serif; transition: all 0.15s; white-space: nowrap; }
+.del-btn:hover { background: #C0392B; color: #fff; border-color: #C0392B; }
+.del-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.list-empty { text-align: center; padding: 32px; color: #B0BDD4; font-size: 13px; }
+.list-loading { text-align: center; padding: 24px; color: #6B7A99; font-size: 13px; }
+.spinner { width: 24px; height: 24px; border: 2px solid #D1DCF0; border-top-color: #0050B3; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 8px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.footer-btns { display: flex; gap: 10px; margin-top: 20px; }
+.back-btn { flex: 1; height: 44px; border: 1.5px solid #D1DCF0; border-radius: 12px; background: transparent; color: #6B7A99; font-size: 14px; cursor: pointer; font-family: 'Noto Sans KR', sans-serif; transition: all 0.15s; }
+.back-btn:hover { border-color: #003087; color: #003087; }
+.logout-btn { height: 44px; padding: 0 20px; border: 1.5px solid #FFC5C5; border-radius: 12px; background: transparent; color: #C0392B; font-size: 13px; cursor: pointer; font-family: 'Noto Sans KR', sans-serif; transition: all 0.15s; }
+.logout-btn:hover { background: #C0392B; color: #fff; }
+</style>
+</head>
+<body>
+
+<header>
+  <a href="/">홈</a>
+  <span class="sep">›</span>
+  <span class="cur">규정 파일 업로드</span>
+</header>
+
+<div class="wrap">
+  <div class="card">
+    <div class="card-title">규정 파일 업로드</div>
+    <div class="card-sub">여러 파일을 한 번에 선택하거나 드래그할 수 있습니다</div>
+
+    <div class="user-badge">
+      <span>🔓</span><span id="adminName">관리자</span>
+    </div>
+
+    <!-- 드롭존 -->
+    <div class="file-zone" id="fileZone"
+         onclick="document.getElementById('fileInput').click()"
+         ondragover="event.preventDefault(); this.classList.add('drag')"
+         ondragleave="this.classList.remove('drag')"
+         ondrop="handleDrop(event)">
+      <input type="file" id="fileInput" accept=".pdf,.docx,.txt,.json"
+             multiple style="display:none" onchange="onFilesChosen(this)">
+      <div class="file-zone-icon">📁</div>
+      <p><strong>클릭하거나 파일을 드래그하세요</strong><br>여러 파일 동시 선택 가능</p>
+      <div class="file-ext">PDF · DOCX · TXT · JSON 지원</div>
+    </div>
+
+    <!-- 선택된 파일 목록 -->
+    <div class="file-list" id="fileList">
+      <div class="file-list-title">선택된 파일 <span id="fileCount"></span></div>
+      <div id="fileRows"></div>
+    </div>
+
+    <!-- 진행바 -->
+    <div class="progress-wrap" id="progressWrap">
+      <div class="progress-label">
+        <span id="progressText">업로드 중...</span>
+        <span id="progressNum">0 / 0</span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+    </div>
+
+    <button class="upload-btn" id="uploadBtn" onclick="doUpload()">업로드 및 DB 등록</button>
+    <div class="summary-msg" id="summaryMsg"></div>
+  </div>
+
+  <!-- 업로드된 규정 목록 -->
+  <div class="list-card">
+    <div class="list-title">📋 업로드된 규정 목록</div>
+    <div class="list-sub">삭제 버튼으로 DB에서 제거할 수 있습니다</div>
+    <div id="ruleList"><div class="list-loading"><div class="spinner"></div>불러오는 중...</div></div>
+  </div>
+
+  <div class="footer-btns">
+    <button class="back-btn" onclick="window.location.href='/'">← 메인으로</button>
+    <button class="logout-btn" onclick="doLogout()">로그아웃</button>
+  </div>
+</div>
+
+<script>
+var token = null;
+var selectedFiles = [];  // File 객체 배열
+
+// 로그인 확인
+(function() {
+  var saved = localStorage.getItem('hsu_token');
+  if (!saved) { window.location.href = '/login-page'; return; }
+  try {
+    var payload = JSON.parse(atob(saved.split('.')[1]));
+    if (payload.exp * 1000 < Date.now()) {
+      localStorage.removeItem('hsu_token');
+      window.location.href = '/login-page';
+      return;
+    }
+    token = saved;
+    if (payload.sub) document.getElementById('adminName').textContent = payload.sub;
+  } catch(e) {
+    localStorage.removeItem('hsu_token');
+    window.location.href = '/login-page';
+  }
+})();
+
+/* ── 파일 선택 ── */
+function onFilesChosen(input) {
+  addFiles(Array.from(input.files));
+  input.value = '';  // 같은 파일 재선택 가능하도록 초기화
+}
+
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById('fileZone').classList.remove('drag');
+  addFiles(Array.from(e.dataTransfer.files));
+}
+
+function addFiles(newFiles) {
+  var allowed = ['.pdf', '.docx', '.txt', '.json'];
+  newFiles.forEach(function(f) {
+    var ext = '.' + f.name.split('.').pop().toLowerCase();
+    if (!allowed.includes(ext)) return;                      // 지원 형식만
+    if (selectedFiles.find(function(s){ return s.name === f.name; })) return;  // 중복 제거
+    selectedFiles.push(f);
+  });
+  renderFileList();
+}
+
+function removeFile(idx) {
+  selectedFiles.splice(idx, 1);
+  renderFileList();
+}
+
+function renderFileList() {
+  var listEl  = document.getElementById('fileList');
+  var rowsEl  = document.getElementById('fileRows');
+  var countEl = document.getElementById('fileCount');
+
+  if (selectedFiles.length === 0) {
+    listEl.style.display = 'none';
+    document.getElementById('summaryMsg').className = 'summary-msg';
+    return;
+  }
+
+  listEl.style.display = 'block';
+  countEl.textContent = selectedFiles.length + '개';
+  rowsEl.innerHTML = selectedFiles.map(function(f, i) {
+    var icon = f.name.endsWith('.pdf') ? '📕' :
+               f.name.endsWith('.docx') ? '📘' :
+               f.name.endsWith('.json') ? '📗' : '📄';
+    return '<div class="file-row" id="row-' + i + '">' +
+      '<span class="file-row-icon">' + icon + '</span>' +
+      '<span class="file-row-name">' + f.name + '</span>' +
+      '<span class="file-row-status" id="status-' + i + '">대기</span>' +
+      '<button class="file-row-remove" onclick="removeFile(' + i + ')" title="제거">✕</button>' +
+    '</div>';
+  }).join('');
+}
+
+/* ── 업로드 ── */
+function setRowState(i, state, msg) {
+  var row = document.getElementById('row-' + i);
+  var status = document.getElementById('status-' + i);
+  if (!row || !status) return;
+  row.className = 'file-row ' + state;
+  // 상태에 따른 아이콘+텍스트
+  if (state === 'uploading') status.textContent = '⏳ ' + (msg || '업로드 중...');
+  else if (state === 'done')  status.textContent = '✅ ' + (msg || '완료');
+  else if (state === 'error') status.textContent = '❌ ' + (msg || '실패');
+  // 완료/오류 상태에서 제거 버튼 숨김
+  var btn = row.querySelector('.file-row-remove');
+  if (btn) btn.style.display = (state === 'uploading') ? 'none' : '';
+}
+
+function setProgress(done, total) {
+  document.getElementById('progressFill').style.width = (done / total * 100) + '%';
+  document.getElementById('progressNum').textContent = done + ' / ' + total;
+}
+
+async function doUpload() {
+  if (selectedFiles.length === 0) {
+    alert('파일을 먼저 선택해주세요.');
+    return;
+  }
+  if (!token) { window.location.href = '/login-page'; return; }
+
+  var btn = document.getElementById('uploadBtn');
+  var progressWrap = document.getElementById('progressWrap');
+  var summaryMsg = document.getElementById('summaryMsg');
+
+  btn.disabled = true;
+  progressWrap.style.display = 'block';
+  summaryMsg.className = 'summary-msg';
+
+  var total   = selectedFiles.length;
+  var success = 0;
+  var failed  = 0;
+
+  // 제거 버튼 전부 숨기기
+  document.querySelectorAll('.file-row-remove').forEach(function(b){ b.style.display='none'; });
+
+  for (var i = 0; i < total; i++) {
+    var file = selectedFiles[i];
+    setRowState(i, 'uploading');
+    document.getElementById('progressText').textContent = '"' + file.name + '" 업로드 중...';
+    setProgress(i, total);
+
+    var form = new FormData();
+    form.append('file', file);
+
+    try {
+      var res = await fetch('/upload-regulation', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + token },
+        body: form
+      });
+
+      if (res.status === 401) {
+        localStorage.removeItem('hsu_token');
+        window.location.href = '/login-page';
+        return;
+      }
+
+      var data = await res.json();
+      if (!res.ok) throw new Error(data.detail || '서버 오류');
+
+      setRowState(i, 'done', '청크 ' + data.chunks + '개 등록');
+      success++;
+
+    } catch(e) {
+      setRowState(i, 'error', e.message);
+      failed++;
+    }
+
+    setProgress(i + 1, total);
+  }
+
+  // 완료 처리
+  btn.disabled = false;
+  document.getElementById('progressText').textContent = '완료';
+
+  summaryMsg.className = 'summary-msg ' + (failed === 0 ? 'ok' : 'err');
+  if (failed === 0) {
+    summaryMsg.textContent = '✅ ' + total + '개 파일 모두 DB 등록 완료!';
+  } else if (success === 0) {
+    summaryMsg.textContent = '❌ 전체 실패 (' + total + '개)';
+  } else {
+    summaryMsg.textContent = '⚠️ 성공 ' + success + '개 / 실패 ' + failed + '개';
+  }
+
+  // 성공한 것들은 목록에서 제거, 실패한 것들만 남김
+  selectedFiles = selectedFiles.filter(function(_, i) {
+    var row = document.getElementById('row-' + i);
+    return row && row.classList.contains('error');
+  });
+
+  loadRuleList();
+}
+
+/* ── 업로드된 규정 목록 ── */
+async function loadRuleList() {
+  var el = document.getElementById('ruleList');
+  el.innerHTML = '<div class="list-loading"><div class="spinner"></div>불러오는 중...</div>';
+  try {
+    var res = await fetch('/uploaded-rules', { headers: { 'Authorization': 'Bearer ' + token } });
+    if (!res.ok) throw new Error();
+    var data = await res.json();
+    if (!data.rules || data.rules.length === 0) {
+      el.innerHTML = '<div class="list-empty">📭 업로드된 규정이 없습니다</div>';
+      return;
+    }
+    el.innerHTML = data.rules.map(function(r) {
+      var safe = r.filename.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+      return '<div class="rule-row">' +
+        '<div class="rule-icon">📄</div>' +
+        '<div class="rule-info">' +
+          '<div class="rule-name">' + r.filename + '</div>' +
+          '<div class="rule-meta">청크 ' + r.chunks + '개 · DB 등록됨</div>' +
+        '</div>' +
+        '<button class="del-btn" onclick="deleteRule(\'' + safe + '\',this)">삭제</button>' +
+      '</div>';
+    }).join('');
+  } catch(e) {
+    el.innerHTML = '<div class="list-empty">목록을 불러오지 못했습니다</div>';
+  }
+}
+
+async function deleteRule(filename, btn) {
+  if (!confirm('"' + filename + '"\n\nDB에서 삭제하시겠습니까?')) return;
+  btn.disabled = true; btn.textContent = '삭제 중...';
+  try {
+    var res = await fetch('/uploaded-rules/' + encodeURIComponent(filename), {
+      method: 'DELETE', headers: { 'Authorization': 'Bearer ' + token }
+    });
+    var data = await res.json();
+    if (!res.ok) throw new Error(data.detail || '삭제 실패');
+    var row = btn.closest('.rule-row');
+    row.style.transition = 'opacity 0.3s, transform 0.3s';
+    row.style.opacity = '0'; row.style.transform = 'translateX(10px)';
+    setTimeout(function() {
+      row.remove();
+      if (!document.querySelector('.rule-row')) {
+        document.getElementById('ruleList').innerHTML = '<div class="list-empty">📭 업로드된 규정이 없습니다</div>';
+      }
+    }, 300);
+  } catch(e) {
+    alert('삭제 실패: ' + e.message);
+    btn.disabled = false; btn.textContent = '삭제';
+  }
+}
+
+function doLogout() { localStorage.removeItem('hsu_token'); window.location.href = '/'; }
+
+loadRuleList();
+</script>
+</body>
+</html>

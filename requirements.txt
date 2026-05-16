@@ -1,0 +1,7 @@
+playwright
+beautifulsoup4
+chromadb
+google-generativeai
+fastapi
+uvicorn[standard]
+python-multipart
