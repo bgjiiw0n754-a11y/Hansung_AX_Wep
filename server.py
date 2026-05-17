@@ -19,10 +19,17 @@ import json as _json
 from pathlib import Path as _Path
 from collections import defaultdict as _defaultdict
 
+import secrets as _secrets
+
 # ── 환경 변수 ──────────────────────────────────────────────────────
 GROQ_KEY   = os.getenv("GROQ_API_KEY")
 DB_URL     = os.getenv("DATABASE_URL")
-SECRET_KEY = os.getenv("SECRET_KEY", "hansung-secret-key")
+
+# SECRET_KEY: .env에 32자 이상으로 설정 권장. 미설정 시 자동 생성 (재시작마다 바뀜)
+_raw_key   = os.getenv("SECRET_KEY", "")
+SECRET_KEY = _raw_key if len(_raw_key) >= 32 else _secrets.token_hex(32)
+if len(_raw_key) < 32:
+    print("⚠️  SECRET_KEY가 짧거나 없습니다. .env에 32자 이상 랜덤 문자열을 추가하세요.")
 
 # 관리자 계정 — .env에 ADMIN_ID / ADMIN_PW 추가하면 변경 가능
 # 기본값: admin / 1234
@@ -76,6 +83,7 @@ SYSTEM = """
 ◆ 첫 번째 줄: 답변을 한 줄로 요약한 제목
   - "제목:", "1.", 기타 레이블 없이 제목 텍스트만 작성합니다.
   - 예시: 교원 신규 임용 절차 안내
+  - 절대 금지: "1. 제목", "제목:", "## 제목" 등 레이블 포함 금지
 
 ◆ 빈 줄 하나
 
@@ -111,7 +119,9 @@ SYSTEM = """
 
 * 한국어로만 답변합니다. 영어, 한자, 일본어 등 다른 언어를 쓰지 않습니다.
 * "1.", "2.", "제목:", "본문:", "출처:", "담당부서:" 같은 번호·레이블을 본문에 출력하지 않습니다.
-  (출처는 괄호 형식, 담당부서는 📞 이모지 형식, 관련 질문은 💡 형식만 허용)
+  나쁜 예시: "1. 제목\n교원 임용 안내\n\n2. 본문\n..."
+  좋은 예시: "교원 임용 안내\n\n교원 신규 임용은..."
+  (출처는 괄호 형식, 담당부서는 📞 형식, 관련 질문은 💡 형식만 허용)
 * 마크다운 기호(**, ##, ---, 표)를 사용하지 않습니다.
 * 규정 원문을 그대로 복사하지 않습니다.
 * 제공된 규정 조항만을 근거로 씁니다. 관련 조항이 없으면 합리적으로 추론합니다.
@@ -134,6 +144,7 @@ class LoginRequest(BaseModel):
 
 class Q(BaseModel):
     question: str
+    messages: list[dict] = []  # 멀티턴 대화 히스토리
 
 class A(BaseModel):
     answer: str
@@ -292,6 +303,17 @@ def _chunk_text(text: str, max_len: int = 400) -> list[str]:
     return [c for c in chunks if len(c) >= 20]
 
 
+def _extract_article_title(chunk: str, idx: int) -> str:
+    """청크에서 조항 제목 추출 (제N조 패턴 우선)"""
+    m = _re.search(r'(제\s*\d+\s*조(?:의\s*\d+)?\s*(?:\([^)]{1,30}\))?)', chunk)
+    if m:
+        return m.group(1).strip()[:60]
+    first = chunk.split('\n')[0].strip()
+    if 3 < len(first) <= 50:
+        return first
+    return f"청크 {idx + 1}"
+
+
 # ── 규정 파일 업로드 & DB 등록 ─────────────────────────────────────
 @app.post("/upload-regulation")
 async def upload_regulation(
@@ -299,6 +321,21 @@ async def upload_regulation(
     payload: dict = Depends(verify_token)
 ):
     filename = file.filename or "unknown"
+    upload_tag = f"upload://{filename}"
+
+    # 0) 중복 업로드 체크
+    try:
+        conn = psycopg2.connect(DB_URL)
+        cur  = conn.cursor()
+        cur.execute("SELECT COUNT(*) FROM rule_chunks WHERE url = %s", (upload_tag,))
+        if cur.fetchone()[0] > 0:
+            conn.close()
+            raise HTTPException(409, f'"{filename}"은(는) 이미 등록된 규정입니다. 삭제 후 다시 업로드하세요.')
+        conn.close()
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, f"DB 확인 실패: {e}")
 
     # 1) 텍스트 추출
     try:
@@ -341,7 +378,7 @@ async def upload_regulation(
             """, (
                 str(base_id + i),
                 filename,
-                f"청크 {i+1}",
+                _extract_article_title(chunk, i),   # 조항 제목 파싱
                 "업로드 규정",
                 upload_tag,
                 chunk,
@@ -487,12 +524,27 @@ def query(req: Q):
         return A(answer="해당 내용을 규정에서 찾지 못했습니다. 담당 부서에 문의하세요.", sources=[], found=False)
 
     ctx    = "\n\n".join([f"[조항 {i+1}] {r[1]} {r[2]}\n{r[5]}" for i, r in enumerate(rows)])
-    prompt = f"{SYSTEM}\n\n[참고 규정 조항]\n{ctx}\n\n[사용자 질문]\n{q}\n\n[답변]"
+
+    # ── 멀티턴: 이전 대화 히스토리 포함 ──────────────────────────────
+    groq_msgs = [{"role": "system", "content": SYSTEM}]
+
+    # 이전 user/assistant 메시지 (최근 3턴 = 6개, system 제외)
+    history = [m for m in req.messages if m.get("role") in ("user", "assistant")]
+    # 마지막 user 메시지는 현재 질문이므로 제외하고 이전 것만
+    prev = history[:-1][-6:] if len(history) > 1 else []
+    for m in prev:
+        groq_msgs.append({"role": m["role"], "content": m["content"]})
+
+    # 현재 질문에 규정 컨텍스트 포함
+    groq_msgs.append({
+        "role": "user",
+        "content": f"[참고 규정 조항]\n{ctx}\n\n[질문]\n{q}"
+    })
 
     try:
         resp = groq_client.chat.completions.create(
             model=GEN_MODEL,
-            messages=[{"role": "user", "content": prompt}],
+            messages=groq_msgs,
             max_tokens=1024,
         )
         answer = resp.choices[0].message.content
@@ -537,39 +589,62 @@ def query(req: Q):
 # ── 규정 목록 ──────────────────────────────────────────────────────
 @app.get("/rules")
 def get_rules():
-    try:
-        json_path = _Path(BASE_DIR) / "hansung_rules.json"
-        if not json_path.exists():
-            return {"chapters": [], "total": 0, "error": "hansung_rules.json not found"}
-        rules = _json.loads(json_path.read_text(encoding="utf-8"))
-        if not rules:
-            return {"chapters": [], "total": 0, "error": "Empty rules data"}
-    except Exception as e:
-        return {"chapters": [], "total": 0, "error": str(e)}
-
     CHAP_MAP = {
         "1": "학교법인", "2": "학칙", "3": "학사행정",
         "4": "부속기관", "5": "부설기관", "6": "위원회",
         "7": "산학협력단", "8": "학생군사교육단",
     }
     chapters = _defaultdict(list)
-    for r in rules:
-        try:
-            title    = r.get("title", "제목 없음")
-            raw_code = r.get("rule_code", "")
-            if not raw_code:
-                content = r.get("content", "")
-                code_m  = _re.search(r'(\d+)-(\d+)-(\d+)', content)
-                raw_code = f"{code_m.group(1)}-{code_m.group(2)}-{code_m.group(3)}" if code_m else ""
-            chap_num  = raw_code.split("-")[0] if raw_code else "0"
-            chap_name = CHAP_MAP.get(chap_num, "기타")
-            chap_key  = f"제{chap_num}편 {chap_name}" if chap_num != "0" else "기타"
-            chapters[chap_key].append({"seq": r.get("seq", 0), "code": raw_code, "name": title, "dept": r.get("department", ""), "url": r.get("url", "")})
-        except:
-            continue
+
+    # ── JSON 기반 기존 규정 ────────────────────────────────────────
+    try:
+        json_path = _Path(BASE_DIR) / "hansung_rules.json"
+        if json_path.exists():
+            rules = _json.loads(json_path.read_text(encoding="utf-8"))
+            for r in rules:
+                try:
+                    title    = r.get("title", "제목 없음")
+                    raw_code = r.get("rule_code", "")
+                    if not raw_code:
+                        code_m  = _re.search(r'(\d+)-(\d+)-(\d+)', r.get("content", ""))
+                        raw_code = f"{code_m.group(1)}-{code_m.group(2)}-{code_m.group(3)}" if code_m else ""
+                    chap_num  = raw_code.split("-")[0] if raw_code else "0"
+                    chap_name = CHAP_MAP.get(chap_num, "기타")
+                    chap_key  = f"제{chap_num}편 {chap_name}" if chap_num != "0" else "기타"
+                    chapters[chap_key].append({
+                        "seq": r.get("seq", 0), "code": raw_code,
+                        "name": title, "dept": r.get("department", ""),
+                        "url": r.get("url", ""), "uploaded": False
+                    })
+                except:
+                    continue
+    except Exception:
+        pass
+
+    # ── DB 업로드 규정 ─────────────────────────────────────────────
+    try:
+        conn = psycopg2.connect(DB_URL)
+        cur  = conn.cursor()
+        cur.execute("""
+            SELECT DISTINCT rule_title, url, department
+            FROM rule_chunks WHERE url LIKE 'upload://%'
+            ORDER BY rule_title
+        """)
+        for row in cur.fetchall():
+            chapters["📁 업로드 규정"].append({
+                "seq": 9999, "code": "upload",
+                "name": row[0], "dept": row[2] or "업로드 규정",
+                "url": "", "uploaded": True
+            })
+        conn.close()
+    except Exception:
+        pass
 
     result = []
-    for key in sorted(chapters.keys(), key=lambda x: int(_re.search(r'제(\d+)편', x).group(1)) if _re.search(r'제(\d+)편', x) else 99):
+    for key in sorted(chapters.keys(), key=lambda x: (
+        int(_re.search(r'제(\d+)편', x).group(1)) if _re.search(r'제(\d+)편', x) else
+        (98 if x == "기타" else 99)
+    )):
         result.append({"chapter": key, "rules": sorted(chapters[key], key=lambda x: x["code"])})
     return {"chapters": result, "total": sum(len(c["rules"]) for c in result)}
 

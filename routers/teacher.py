@@ -9,10 +9,11 @@ from fastapi import APIRouter, UploadFile, File, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from pdfminer.high_level import extract_text_to_fp
-from pdfminer.layout import LAParams
+from pdfminer.high_level import extract_text
 from docx import Document as DocxDocument
 from docx.shared import Pt, RGBColor
+from docx.oxml.ns import qn
+from docx.oxml import OxmlElement
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import cm
@@ -26,6 +27,44 @@ router = APIRouter(tags=["teacher"])
 
 GEN_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
 
+# ── PDF 폰트: 서버 시작 시 1회 초기화 ──────────────────────────────
+_PDF_FONT = "Helvetica"
+
+def _init_pdf_font():
+    global _PDF_FONT
+    # 이미 한글 폰트 등록됐으면 스킵
+    try:
+        pdfmetrics.getFont("KR")
+        _PDF_FONT = "KR"
+        return
+    except Exception:
+        pass
+
+    # 폰트 후보 (Windows → Linux → Mac 순)
+    candidates = [
+        "C:/Windows/Fonts/malgun.ttf",      # 맑은 고딕 (Windows 10/11)
+        "C:/Windows/Fonts/malgunbd.ttf",     # 맑은 고딕 Bold
+        "C:/Windows/Fonts/batang.ttc",       # 바탕체 (ttc 제외)
+        "/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
+        "/usr/share/fonts/truetype/nanum/NanumBarunGothic.ttf",
+        "/System/Library/Fonts/AppleGothic.ttf",
+    ]
+
+    for fp in candidates:
+        if not os.path.exists(fp):
+            continue
+        if fp.endswith(".ttc"):
+            continue  # TTC 컬렉션은 TTFont 단독 등록 불가 → 스킵
+        try:
+            pdfmetrics.registerFont(TTFont("KR", fp))
+            _PDF_FONT = "KR"
+            return
+        except Exception:
+            continue
+
+_init_pdf_font()  # 모듈 임포트 시 1회 실행
+
+
 def _db_url():
     url = os.getenv("DATABASE_URL")
     if not url:
@@ -33,7 +72,7 @@ def _db_url():
     return url
 
 def set_ai_client(client):
-    pass  # 호환성 유지용 (미사용)
+    pass  # 호환성 유지용
 
 def _client():
     from groq import Groq
@@ -43,42 +82,45 @@ def _client():
     return Groq(api_key=key)
 
 
-# ── 텍스트 추출 ──────────────────────────────
+# ── 텍스트 추출 ────────────────────────────────────────────────────
 def _extract(file: UploadFile) -> str:
+    file.file.seek(0)
     data  = file.file.read()
     fname = (file.filename or "").lower()
     ctype = (file.content_type or "").lower()
 
-    is_pdf  = fname.endswith(".pdf") or "pdf" in ctype
-    is_docx = fname.endswith(".docx") or "wordprocessingml" in ctype
-    is_txt  = fname.endswith(".txt") or "text/plain" in ctype
-
-    if is_pdf:
+    if fname.endswith(".pdf") or "pdf" in ctype:
         try:
-            from pdfminer.high_level import extract_text
             text = extract_text(io.BytesIO(data))
             if text and text.strip():
                 return text.strip()
-        except:
+        except Exception:
             pass
-        raise HTTPException(400, "PDF 텍스트 추출 실패. 텍스트 기반 PDF(스캔본 제외)만 지원합니다.")
+        raise HTTPException(400, "PDF 텍스트 추출 실패. 텍스트 기반 PDF만 지원합니다.")
 
-    elif is_docx:
+    if fname.endswith(".docx") or "wordprocessingml" in ctype:
         doc = DocxDocument(io.BytesIO(data))
         return "\n".join(p.text for p in doc.paragraphs if p.text.strip())
 
-    elif is_txt:
-        for enc in ["utf-8", "cp949", "euc-kr"]:
-            try:
-                return data.decode(enc).strip()
-            except:
-                continue
-        return data.decode("utf-8", errors="ignore").strip()
+    if fname.endswith(".json"):
+        try:
+            items = json.loads(data.decode("utf-8"))
+            if isinstance(items, list):
+                return "\n".join(" ".join(str(v) for v in item.values() if v)
+                                 for item in items if isinstance(item, dict))
+            return json.dumps(items, ensure_ascii=False)
+        except Exception as e:
+            raise HTTPException(400, f"JSON 파싱 실패: {e}")
 
-    raise HTTPException(400, "지원 형식: PDF, DOCX, TXT")
+    for enc in ["utf-8", "cp949", "euc-kr"]:
+        try:
+            return data.decode(enc).strip()
+        except Exception:
+            continue
+    return data.decode("utf-8", errors="ignore").strip()
 
 
-# ── POST /conflict/ ──────────────────────────
+# ── POST /conflict/ ───────────────────────────────────────────────
 class ConflictReport(BaseModel):
     summary: str
     conflicts: list[dict]
@@ -91,7 +133,6 @@ async def analyze_conflict(file: UploadFile = File(...)):
     if not doc_text:
         raise HTTPException(400, "텍스트 추출 실패")
 
-    # DB에서 관련 규정 검색
     related = []
     try:
         conn = psycopg2.connect(_db_url())
@@ -112,7 +153,9 @@ async def analyze_conflict(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(500, f"DB 오류: {e}")
 
-    rules_ctx = "\n\n".join(f"[{r['title']} {r['article']}]\n{r['content']}" for r in related[:10])
+    rules_ctx = "\n\n".join(
+        f"[{r['title']} {r['article']}]\n{r['content']}" for r in related[:10]
+    )
 
     prompt = f"""당신은 한성대학교 규정 전문가입니다.
 아래 [업로드 문서]와 [기존 규정]을 비교하여 충돌·불일치를 분석하세요.
@@ -155,7 +198,7 @@ async def analyze_conflict(file: UploadFile = File(...)):
     )
 
 
-# ── POST /export/pdf ─────────────────────────
+# ── POST /export/pdf ──────────────────────────────────────────────
 class ExportReq(BaseModel):
     title:    str = "규정 답변 리포트"
     content:  str
@@ -165,54 +208,57 @@ class ExportReq(BaseModel):
 @router.post("/export/pdf")
 def export_pdf(req: ExportReq):
     buf = io.BytesIO()
+    fn  = _PDF_FONT  # "KR" or "Helvetica"
 
-    # Windows malgun.ttf, Linux NanumGothic, fallback Helvetica
-    font_name = "Helvetica"
-    for fp in [
-        "C:/Windows/Fonts/malgun.ttf",
-        "C:/Windows/Fonts/gulim.ttc",
-        "/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
-    ]:
-        if os.path.exists(fp):
-            try:
-                pdfmetrics.registerFont(TTFont("KR", fp))
-                font_name = "KR"
-            except:
-                pass
-            break
+    def ps(name, size, color="#1A2340", sa=6, leading=None):
+        return ParagraphStyle(
+            name, fontName=fn, fontSize=size, spaceAfter=sa,
+            textColor=colors.HexColor(color),
+            leading=leading or size * 1.65
+        )
 
-    doc = SimpleDocTemplate(buf, pagesize=A4,
-        leftMargin=2*cm, rightMargin=2*cm,
-        topMargin=2*cm, bottomMargin=2*cm)
-
-    def ps(name, size, color="#000000", sa=6):
-        return ParagraphStyle(name, fontName=font_name, fontSize=size,
-            spaceAfter=sa, textColor=colors.HexColor(color), leading=size*1.6)
-
-    def safe(t):
+    def safe(t: str) -> str:
         return (t or "").replace('&','&amp;').replace('<','&lt;').replace('>','&gt;').replace('\n','<br/>')
 
-    story = [
-        Paragraph("한성대학교 규정 마스터 AI", ps("s0",10,"#6B7A99")),
-        Paragraph(req.title or "규정 답변 리포트", ps("s1",15,"#003087",sa=8)),
-        HRFlowable(width="100%",thickness=1,color=colors.HexColor("#003087"),spaceAfter=12),
-    ]
+    doc = SimpleDocTemplate(buf, pagesize=A4,
+        leftMargin=2.2*cm, rightMargin=2.2*cm,
+        topMargin=2.5*cm, bottomMargin=2*cm)
+
+    story = []
+
+    # 헤더
+    story.append(Paragraph("한성대학교 규정 마스터 AI", ps("meta", 9, "#6B7A99", sa=4)))
+    story.append(Paragraph(safe(req.title or "규정 답변 리포트"), ps("title", 16, "#003087", sa=10)))
+    story.append(HRFlowable(width="100%", thickness=2, color=colors.HexColor("#003087"), spaceAfter=14))
+
+    # 질문
     if req.question:
-        story += [Paragraph("[ 질문 ]", ps("s2",11,"#003087",sa=4)),
-                  Paragraph(safe(req.question), ps("s3",11,sa=10))]
-    story.append(Paragraph("[ 답변 ]", ps("s4",11,"#003087",sa=4)))
+        story.append(Paragraph("질문", ps("qlabel", 10, "#003087", sa=4)))
+        story.append(Paragraph(safe(req.question), ps("qtxt", 11, "#1A2340", sa=12)))
+
+    # 답변
+    story.append(Paragraph("답변", ps("alabel", 10, "#003087", sa=6)))
     for line in (req.content or "").split("\n"):
-        if line.strip():
-            story.append(Paragraph(safe(line), ps("s5",11,sa=4)))
+        stripped = line.strip()
+        if not stripped:
+            story.append(Spacer(1, 4))
+            continue
+        # 출처 라인은 색 달리
+        if stripped.startswith("(출처"):
+            story.append(Paragraph(safe(stripped), ps("src", 9, "#0050B3", sa=3)))
+        else:
+            story.append(Paragraph(safe(stripped), ps("body", 11, "#1A2340", sa=4)))
+
+    # 참조 조항
     if req.sources:
-        story += [Spacer(1,8),
-                  HRFlowable(width="100%",thickness=0.5,color=colors.HexColor("#D1DCF0"),spaceAfter=6),
-                  Paragraph("[ 참조 조항 ]", ps("s6",10,"#003087",sa=4))]
+        story.append(Spacer(1, 10))
+        story.append(HRFlowable(width="100%", thickness=0.5,
+                                color=colors.HexColor("#D1DCF0"), spaceAfter=8))
+        story.append(Paragraph("참조 조항", ps("srclabel", 10, "#003087", sa=6)))
         for s in req.sources:
-            score = int(s.get("score",0)*100)
-            story.append(Paragraph(
-                f"• {s.get('title','')} {s.get('article','')} (유사도 {score}%)",
-                ps("s7",9,"#6B7A99",sa=3)))
+            score = int(float(s.get("score", 0)) * 100)
+            line  = f"• {s.get('title','')}  {s.get('article','')}  (유사도 {score}%)"
+            story.append(Paragraph(safe(line), ps("srcitem", 9, "#6B7A99", sa=3)))
 
     doc.build(story)
     buf.seek(0)
@@ -220,39 +266,67 @@ def export_pdf(req: ExportReq):
         headers={"Content-Disposition": 'attachment; filename="hansung_report.pdf"'})
 
 
-# ── POST /export/docx ────────────────────────
+# ── POST /export/docx ─────────────────────────────────────────────
+def _set_font(run, name="맑은 고딕", size=None):
+    """run에 한글 폰트 직접 지정"""
+    run.font.name = name
+    run._element.rPr.rFonts.set(qn("w:eastAsia"), name)
+    if size:
+        run.font.size = Pt(size)
+
+def _add_para(doc, text, font="맑은 고딕", size=10.5, bold=False, color=None, style=None):
+    p = doc.add_paragraph(style=style)
+    run = p.add_run(text)
+    _set_font(run, font, size)
+    run.bold = bold
+    if color:
+        run.font.color.rgb = RGBColor(*color)
+    return p
+
 @router.post("/export/docx")
 def export_docx(req: ExportReq):
     doc = DocxDocument()
 
-    def heading(text, level, color=(0, 48, 135)):
-        h = doc.add_heading(text, level=level)
-        if h.runs:
-            h.runs[0].font.color.rgb = RGBColor(*color)
-        return h
+    # 기본 Normal 스타일에 한글 폰트 적용
+    normal = doc.styles["Normal"]
+    normal.font.name = "맑은 고딕"
+    normal._element.rPr.rFonts.set(qn("w:eastAsia"), "맑은 고딕")
+    normal.font.size = Pt(10.5)
 
-    heading(req.title, 1)
-    doc.add_paragraph("한성대학교 규정 마스터 AI")
-    doc.add_paragraph("─" * 50)
+    # 제목
+    h = doc.add_heading(req.title or "규정 답변 리포트", level=1)
+    if h.runs:
+        _set_font(h.runs[0], "맑은 고딕", 16)
+        h.runs[0].font.color.rgb = RGBColor(0, 48, 135)
 
+    _add_para(doc, "한성대학교 규정 마스터 AI", size=9, color=(107, 122, 153))
+    doc.add_paragraph()
+
+    # 질문
     if req.question:
-        heading("질문", 2)
-        doc.add_paragraph(req.question)
+        _add_para(doc, "[ 질문 ]", size=11, bold=True, color=(0, 48, 135))
+        _add_para(doc, req.question, size=11)
+        doc.add_paragraph()
 
-    heading("답변", 2)
-    for line in req.content.split('\n'):
-        if line.strip():
-            doc.add_paragraph(line)
+    # 답변
+    _add_para(doc, "[ 답변 ]", size=11, bold=True, color=(0, 48, 135))
+    for line in (req.content or "").split("\n"):
+        stripped = line.strip()
+        if not stripped:
+            doc.add_paragraph()
+            continue
+        color = (0, 80, 179) if stripped.startswith("(출처") else None
+        size  = 9 if stripped.startswith("(출처") else 11
+        _add_para(doc, stripped, size=size, color=color)
 
+    # 참조 조항
     if req.sources:
-        doc.add_paragraph("─" * 50)
-        heading("참조 조항", 2)
+        doc.add_paragraph()
+        _add_para(doc, "[ 참조 조항 ]", size=11, bold=True, color=(0, 48, 135))
         for s in req.sources:
-            score = int(s.get('score', 0) * 100)
-            p = doc.add_paragraph(style='List Bullet')
-            run = p.add_run(f"{s.get('title','')}  {s.get('article','')}  (유사도 {score}%)")
-            run.font.size = Pt(10)
-            run.font.color.rgb = RGBColor(107, 122, 153)
+            score = int(float(s.get("score", 0)) * 100)
+            text  = f"• {s.get('title','')}  {s.get('article','')}  (유사도 {score}%)"
+            _add_para(doc, text, size=9, color=(107, 122, 153))
 
     buf = io.BytesIO()
     doc.save(buf)
