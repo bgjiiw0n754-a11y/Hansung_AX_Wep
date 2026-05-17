@@ -359,6 +359,31 @@ async def upload_regulation(
     except Exception as e:
         raise HTTPException(500, f"임베딩 생성 실패: {e}")
 
+    # 3-1) 규정 편 분류 (Groq로 1~8편 판단)
+    CHAP_MAP_UP = {
+        "1": "학교법인", "2": "학칙", "3": "학사행정",
+        "4": "부속기관", "5": "부설기관", "6": "위원회",
+        "7": "산학협력단", "8": "학생군사교육단",
+    }
+    try:
+        clf = groq_client.chat.completions.create(
+            model=GEN_MODEL,
+            messages=[{"role": "user", "content": f"""한성대학교 규정 체계에서 다음 문서가 속하는 편 번호(1~8)만 답하세요.
+1편:학교법인  2편:학칙  3편:학사행정  4편:부속기관
+5편:부설기관  6편:위원회  7편:산학협력단  8편:학생군사교육단
+규정명: {filename}
+내용: {text[:300]}
+숫자 하나만 답하세요:"""}],
+            max_tokens=3,
+        )
+        raw_clf = clf.choices[0].message.content.strip()
+        m_clf   = _re.search(r'[1-8]', raw_clf)
+        chap_num = m_clf.group(0) if m_clf else "3"
+    except Exception:
+        chap_num = "3"  # 분류 실패 시 학사행정(3편)으로
+
+    dept_tag = f"업로드:{chap_num}"  # 예: "업로드:3"
+
     # 4) DB 삽입 — url 컬럼에 upload:// 태그로 식별
     upload_tag = f"upload://{filename}"
     inserted = 0
@@ -379,7 +404,7 @@ async def upload_regulation(
                 str(base_id + i),
                 filename,
                 _extract_article_title(chunk, i),   # 조항 제목 파싱
-                "업로드 규정",
+                dept_tag,          # "업로드:N" — 편 분류 정보 포함
                 upload_tag,
                 chunk,
                 str(emb)
@@ -575,11 +600,23 @@ def query(req: Q):
             if line.strip().startswith('-') and len(line.strip()) > 3
         ][:4]
 
-    # ── 본문 정리: 📞 담당부서 줄과 💡 이하 전체 제거
+    # ── 본문 정리 ─────────────────────────────────────────────────
+    import re as _re2
+
+    # 📞 담당부서 줄 제거
     clean_answer = _re2.sub(r'\n*📞[^\n]*담당부서[^\n]*', '', answer)
+    # 💡 관련질문 섹션 전체 제거
     clean_answer = _re2.sub(r'\n*💡[\s\S]*', '', clean_answer)
-    # 혹시 남은 번호 레이블 제거 (1. 제목 / 2. 본문 / 3. 출처 / 4. 담당부서 / 5. 관련 질문 등)
-    clean_answer = _re2.sub(r'(?m)^\s*\d+\.\s*(제목|본문|출처|담당부서|관련\s*질문)\s*\n?', '', clean_answer)
+    # "1. 제목 / 2. 본문 / 3. 출처 / 4. 담당부서" 형태 줄 제거
+    clean_answer = _re2.sub(r'(?m)^\s*\d+\s*[.\)]\s*(제목|본문|출처|담당부서|관련\s*질문)[^\n]*\n?', '', clean_answer)
+    # "제목:", "본문:" 형태 레이블 제거
+    clean_answer = _re2.sub(r'(?m)^(제목|본문)\s*[:：]\s*', '', clean_answer)
+    # 마크다운 헤더 형태 제거 (## 제목, ### 본문 등)
+    clean_answer = _re2.sub(r'(?m)^#+\s*(제목|본문|출처|담당부서)[^\n]*\n?', '', clean_answer)
+    # **제목**, **본문** 형태 볼드 제거
+    clean_answer = _re2.sub(r'\*\*(제목|본문)\*\*\s*\n?', '', clean_answer)
+    # 3줄 이상 연속 빈 줄 → 2줄로
+    clean_answer = _re2.sub(r'\n{3,}', '\n\n', clean_answer)
     clean_answer = clean_answer.strip()
 
     return A(answer=clean_answer, sources=sources, found=True,
@@ -621,7 +658,7 @@ def get_rules():
     except Exception:
         pass
 
-    # ── DB 업로드 규정 ─────────────────────────────────────────────
+    # ── DB 업로드 규정 — 편 분류해서 기존 챕터에 통합 ────────────
     try:
         conn = psycopg2.connect(DB_URL)
         cur  = conn.cursor()
@@ -631,9 +668,17 @@ def get_rules():
             ORDER BY rule_title
         """)
         for row in cur.fetchall():
-            chapters["📁 업로드 규정"].append({
-                "seq": 9999, "code": "upload",
-                "name": row[0], "dept": row[2] or "업로드 규정",
+            rule_title, url, department = row
+            # department = "업로드:N" 형태에서 편 번호 추출
+            m_chap = _re.search(r'업로드:([1-8])', department or '')
+            chap_num  = m_chap.group(1) if m_chap else "3"
+            chap_name = CHAP_MAP.get(chap_num, "학사행정")
+            chap_key  = f"제{chap_num}편 {chap_name}"
+            chapters[chap_key].append({
+                "seq": 9999,
+                "code": f"{chap_num}-upload",
+                "name": f"📎 {rule_title}",   # 업로드 규정 표시
+                "dept": "업로드 규정",
                 "url": "", "uploaded": True
             })
         conn.close()
