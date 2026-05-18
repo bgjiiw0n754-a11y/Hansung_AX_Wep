@@ -36,15 +36,9 @@ header p { font-size: 13px; color: rgba(255,255,255,0.6); font-weight: 300; }
 .nav-item:hover { color: rgba(255,255,255,0.85); }
 .nav-spacer { flex: 1; }
 
-/* 규정 업데이트 버튼 */
-#nav-update {
-  font-size: 12px; font-weight: 700; color: #93C5FD;
-  background: rgba(147,197,253,0.12); border: 1px solid rgba(147,197,253,0.3);
-  border-radius: 20px; padding: 6px 14px; margin: 6px 0;
-  cursor: pointer; transition: all 0.2s; border-bottom: none !important;
-}
-#nav-update:hover { background: rgba(147,197,253,0.25); color: #fff; }
-body:not(.mode-staff) #nav-update { display: none; }
+/* 규정 업데이트 버튼 — 교직원 도구 바로 옆, 동일 스타일 */
+#nav-update { display: none; }
+body.mode-staff #nav-update { display: block; }
 
 /* 앱 레이아웃 */
 .app-body { display: flex; min-height: calc(100vh - 160px); }
@@ -59,11 +53,15 @@ body:not(.mode-staff) #nav-update { display: none; }
 .sidebar-title { font-size: 10px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: #6B7A99; margin-bottom: 10px; padding: 4px 4px 8px; border-bottom: 1px solid #D1DCF0; display: flex; justify-content: space-between; align-items: center; }
 .sidebar-clear { font-size: 10px; color: #B0BDD4; cursor: pointer; }
 .sidebar-clear:hover { color: #E24B4A; }
-.history-item { padding: 9px 10px; border-radius: 8px; cursor: pointer; margin-bottom: 4px; transition: background 0.13s; overflow: hidden; }
+.history-item { padding: 9px 10px; border-radius: 8px; cursor: pointer; margin-bottom: 4px; transition: background 0.13s; overflow: hidden; display: flex; align-items: center; gap: 4px; }
 .history-item:hover { background: #EEF3FB; }
 .history-item.active { background: #EEF3FB; border-left: 3px solid #003087; }
+.history-item-body { flex: 1; min-width: 0; cursor: pointer; }
 .history-q { font-size: 12px; font-weight: 500; color: #1A2340; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .history-time { font-size: 10px; color: #6B7A99; margin-top: 2px; }
+.history-del-btn { flex-shrink: 0; width: 18px; height: 18px; border: none; background: none; color: #C5D4ED; cursor: pointer; font-size: 11px; padding: 0; line-height: 1; border-radius: 4px; display: flex; align-items: center; justify-content: center; opacity: 0; transition: all 0.15s; }
+.history-item:hover .history-del-btn { opacity: 1; }
+.history-del-btn:hover { background: #FFF0F0; color: #C0392B; }
 
 main { flex: 1; min-width: 0; max-width: 960px; margin: 0 auto; padding: 28px 32px 60px; }
 .page { display: none; }
@@ -239,8 +237,8 @@ body.mode-staff #nav-teacher { display: block; }
     <div class="nav-item active" onclick="showPage('search', this)">규정 검색</div>
     <div class="nav-item" onclick="showPage('list', this)">규정 목록</div>
     <div class="nav-item" id="nav-teacher" onclick="showPage('teacher', this)">📋 교직원 도구</div>
-    <div class="nav-spacer"></div>
     <div class="nav-item" id="nav-update" onclick="window.location.href='/login-page'">🔄 규정 업데이트</div>
+    <div class="nav-spacer"></div>
   </div>
 </div>
 
@@ -363,10 +361,10 @@ function toggleSidebar() {
   document.getElementById('sidebarIcon').textContent = sb.classList.contains('open') ? '✕' : '☰';
 }
 
-function addToHistory(question, msgs) {
+function addToHistory(question, msgs, responseData) {
   const now = new Date();
   const time = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
-  const item = { id: Date.now(), q: question, messages: msgs, time };
+  const item = { id: Date.now(), q: question, messages: msgs, time, responseData };
   chatHistory.unshift(item);
   currentChatId = item.id;
   saveHistory();
@@ -384,21 +382,63 @@ function renderHistory() {
     return;
   }
   list.innerHTML = chatHistory.map(item => `
-    <div class="history-item ${currentChatId === item.id ? 'active' : ''}" onclick="restoreHistory(${item.id})">
-      <div class="history-q">${item.q.length>30 ? item.q.slice(0,30)+'…' : item.q}</div>
-      <div class="history-time">${item.time}</div>
+    <div class="history-item ${currentChatId === item.id ? 'active' : ''}" id="hist-${item.id}">
+      <div class="history-item-body" onclick="restoreHistory(${item.id})">
+        <div class="history-q">${item.q.length>28 ? item.q.slice(0,28)+'…' : item.q}</div>
+        <div class="history-time">${item.time}</div>
+      </div>
+      <button class="history-del-btn" onclick="deleteHistoryItem(${item.id}, event)" title="삭제">✕</button>
     </div>`).join('');
 }
 
-function restoreHistory(id) {
+function deleteHistoryItem(id, e) {
+  e.stopPropagation();
+  const idx = chatHistory.findIndex(v => v.id === id);
+  if (idx === -1) return;
+  chatHistory.splice(idx, 1);
+  if (currentChatId === id) {
+    currentChatId = chatHistory.length ? chatHistory[0].id : null;
+    if (!chatHistory.length) {
+      messages = [{ role: 'system', content: '한성대학교 규정 기반 AI 챗봇' }];
+      document.getElementById('result').innerHTML = '<div class="empty"><div class="empty-icon">📜</div><p>질문을 입력하면<br>관련 규정을 찾아 근거와 함께 답변합니다.</p></div>';
+    }
+  }
+  saveHistory();
+  renderHistory();
+}
+
+async function restoreHistory(id) {
   const item = chatHistory.find(v => v.id === id);
   if (!item) return;
   currentChatId = id;
   messages = structuredClone(item.messages);
   const lastUser = [...messages].reverse().find(v => v.role === 'user');
-  const lastAss  = [...messages].reverse().find(v => v.role === 'assistant');
   if (lastUser) document.getElementById('questionInput').value = lastUser.content;
-  if (lastAss)  renderAnswer(lastUser?.content || '', { answer: lastAss.content, found: true, followups: [], sources: [] });
+
+  if (item.responseData) {
+    // 완전한 데이터 있으면 즉시 표시
+    renderAnswer(lastUser?.content || '', item.responseData, true);
+  } else {
+    // 구버전 히스토리: 텍스트 먼저 표시 후 백그라운드 재조회
+    const lastAss = [...messages].reverse().find(v => v.role === 'assistant');
+    if (lastAss) renderAnswer(lastUser?.content || '',
+      { answer: lastAss.content, found: true, followups: [], sources: [] }, true);
+
+    // 백그라운드에서 소스·관련질문 가져오기 (로딩 표시 없음)
+    try {
+      const res = await fetch(`${API}/query`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: lastUser.content, messages: messages })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        item.responseData = data;
+        saveHistory();
+        renderAnswer(lastUser?.content || '', data, true); // 애니메이션 없이 덮어씌우기
+      }
+    } catch(e) {}
+  }
+
   renderHistory();
   showPage('search', document.querySelectorAll('.nav-item')[0]);
 }
@@ -502,13 +542,26 @@ function toggleChapter(idx) { document.getElementById('ch-' + idx).classList.tog
 function filterRules() {
   const q = document.getElementById('ruleSearch').value.trim().toLowerCase();
   if (!rulesData) return;
-  if (!q) { renderRules(rulesData.chapters); return; }
+  if (!q) {
+    renderRules(rulesData.chapters);
+    document.getElementById('rulesCount').textContent = `총 ${rulesData.total}개 규정`;
+    return;
+  }
   const filtered = rulesData.chapters.map(ch => ({
-    ...ch, rules: ch.rules.filter(r => (r.name + r.dept + r.code).toLowerCase().includes(q))
+    ...ch,
+    rules: ch.rules.filter(r =>
+      (r.name || '').toLowerCase().includes(q) ||
+      (r.dept || '').toLowerCase().includes(q) ||
+      (r.code || '').toLowerCase().includes(q)
+    )
   })).filter(ch => ch.rules.length > 0);
+
   renderRules(filtered);
+  // 검색 결과 있으면 전체 펼치기
   document.querySelectorAll('.chapter-block').forEach(b => b.classList.add('open'));
-  document.getElementById('rulesCount').textContent = `${filtered.reduce((a,c)=>a+c.rules.length,0)}개 검색됨`;
+  const total = filtered.reduce((a, c) => a + c.rules.length, 0);
+  document.getElementById('rulesCount').textContent =
+    total ? `${total}개 검색됨` : '검색 결과 없음';
 }
 
 /* ── 질문 & 답변 ── */
@@ -532,7 +585,7 @@ async function ask() {
     if (!res.ok) { const err = await res.json(); throw new Error(err.detail || '서버 오류'); }
     const data = await res.json();
     messages.push({ role: 'assistant', content: data.answer });
-    addToHistory(q, structuredClone(messages));
+    addToHistory(q, structuredClone(messages), data);
     renderAnswer(q, data);
   } catch(e) {
     result.innerHTML = `<div class="err">오류: ${e.message}<br><small>서버가 실행 중인지 확인하세요 (uvicorn server:app --reload)</small></div>`;
@@ -545,7 +598,7 @@ async function setFollowup(q) {
   await ask();
 }
 
-function renderAnswer(question, data) {
+function renderAnswer(question, data, instant = false) {
   const result = document.getElementById('result');
   const truncQ = question.length > 40 ? question.slice(0,40) + '…' : question;
 
@@ -572,9 +625,13 @@ function renderAnswer(question, data) {
 
   let followupHtml = '';
   if (data.followups && data.followups.length > 0) {
-    const items = data.followups.slice(0,4).map(q =>
-      `<div class="followup-item" onclick="setFollowup(this.dataset.q)" data-q="${q.replace(/"/g,'&quot;')}">
-        <span>${q}</span><span class="followup-arrow">›</span></div>`).join('');
+    const items = data.followups.slice(0,4).map(q => {
+      // Q: 접두사 혹시 남아있으면 제거
+      const clean = q.replace(/^Q:\s*/i, '').replace(/\s*A:[\s\S]*/i, '').trim();
+      if (!clean) return '';
+      return `<div class="followup-item" onclick="setFollowup(this.dataset.q)" data-q="${clean.replace(/"/g,'&quot;')}">
+        <span>${clean}</span><span class="followup-arrow">›</span></div>`;
+    }).filter(Boolean).join('');
     followupHtml = `<div class="followup-section"><div class="followup-label">💡 이런 것도 궁금하신가요?</div>
       <div class="followup-grid">${items}</div></div>`;
   }
@@ -593,10 +650,18 @@ function renderAnswer(question, data) {
     <div id="answerExtras" style="display:none">${src}${deptHtml}${followupHtml}${exportBar}</div>
   </div>`;
 
-  typeText(document.getElementById('typingBody'), data.answer, 12).then(() => {
+  if (instant) {
+    // 히스토리 복원: 애니메이션 없이 즉시 표시
+    const body = document.getElementById('typingBody');
+    if (body) body.innerHTML = (data.answer || '').replace(/\n/g, '<br>');
     const extras = document.getElementById('answerExtras');
-    if (extras) { extras.style.display = ''; extras.style.animation = 'fadeUp 0.3s ease'; }
-  });
+    if (extras) extras.style.display = '';
+  } else {
+    typeText(document.getElementById('typingBody'), data.answer, 12).then(() => {
+      const extras = document.getElementById('answerExtras');
+      if (extras) { extras.style.display = ''; extras.style.animation = 'fadeUp 0.3s ease'; }
+    });
+  }
 
   window._lastAnswer = { ...data, question };
 }

@@ -3,7 +3,7 @@
 
 # 한성대학교 규정 마스터 AI
 
-한성대학교 규정관리시스템의 규정을 크롤링하여 벡터 DB에 저장하고,
+한성대학교 규정관리시스템의 규정과 첨부파일(HWP/PDF/DOCX)을 크롤링하여 벡터 DB에 저장하고,
 사용자 질문에 대해 규정 근거를 명시하며 답변하는 AI 웹 서비스.
 
 ---
@@ -12,7 +12,7 @@
 
 | 역할 | 기술 |
 |------|------|
-| 크롤링 | Python + requests + BeautifulSoup |
+| 크롤링 | Python + requests + BeautifulSoup + pyhwp |
 | 벡터 임베딩 | sentence-transformers (로컬, 무료) |
 | 벡터 DB | PostgreSQL + pgvector (Docker 컨테이너) |
 | AI 답변 생성 | Groq API (Llama 4 Scout 17B, 무료) |
@@ -25,7 +25,7 @@
 
 ### 1. Python 패키지
 ```powershell
-pip install requests beautifulsoup4 fastapi uvicorn psycopg2-binary python-dotenv sentence-transformers groq python-docx reportlab pdfminer.six python-multipart PyJWT
+pip install requests beautifulsoup4 fastapi uvicorn psycopg2-binary python-dotenv sentence-transformers groq python-docx reportlab pdfminer.six pdfplumber pyhwp lxml PyJWT python-multipart
 ```
 
 ### 2. Docker Desktop
@@ -49,7 +49,7 @@ docker run -d --name hansung-db `
 Hansung_AX/
 ├── .env                  # API 키, DB 연결 정보, 관리자 계정 (git 업로드 금지)
 ├── .gitignore
-├── crawler.py            # 한성대 규정 크롤러
+├── crawler.py            # 한성대 규정 크롤러 (HWP 첨부파일 추출 포함)
 ├── patch_codes.py        # 규정 코드 패치 스크립트 (최초 1회)
 ├── build_db.py           # 벡터 DB 구축 스크립트
 ├── server.py             # FastAPI 백엔드 서버
@@ -57,7 +57,7 @@ Hansung_AX/
 ├── login.html            # 관리자 로그인 페이지
 ├── upload.html           # 규정 파일 업로드 페이지 (로그인 필요)
 ├── HSU_logo.png          # 한성대 로고
-├── hansung_rules.json    # 크롤링 결과
+├── hansung_rules.json    # 크롤링 결과 (HWP 본문 포함)
 ├── requirements.txt      # 패키지 목록
 ├── uploads/              # 업로드된 규정 파일 로컬 백업
 ├── routers/
@@ -72,10 +72,12 @@ Hansung_AX/
 
 ### crawler.py
 - rule.hansung.ac.kr 규정관리시스템 크롤링
-- lawDetail.do → lawFullView.do → lawFullContent.do 3단계로 실제 조항 본문 수집
-- 세션 쿠키 기반 인증 (주기적으로 갱신 필요)
+- lawDetail.do → lawFullView.do → lawFullContent.do 3단계로 조항 본문 수집
+- `javascript:fileDown(SEQ, 'ori')` 패턴 감지 → POST `/lmxsrv/fileDown.do` 로 첨부파일 다운로드
+- HWP(pyhwp CLI), HWPX(ZIP+XML), PDF(pdfplumber), DOCX(python-docx) 텍스트 추출
+- 첨부파일 텍스트를 본문에 합산하여 hansung_rules.json 저장
 - SEQ 1~1000 순회, 중간저장 지원 → 재실행 시 이어서 진행
-- 결과를 hansung_rules.json으로 저장
+- 쿠키 만료 시 브라우저에서 갱신 필요 (아래 쿠키 갱신 방법 참고)
 
 ### patch_codes.py
 - hansung_rules.json에 규정 코드(1-0-1 등) 추가
@@ -86,7 +88,6 @@ Hansung_AX/
 - hansung_rules.json 읽어서 조항(제N조) 단위로 청크 분할
 - sentence-transformers `paraphrase-multilingual-MiniLM-L12-v2` 로컬 임베딩 (384차원)
 - Docker PostgreSQL의 rule_chunks 테이블에 저장
-- 약 5분 내 완료
 
 ### server.py (FastAPI)
 
@@ -105,7 +106,7 @@ Hansung_AX/
 - `POST /login` → 아이디/비밀번호 검증 → JWT 토큰 발급 (12시간 유효)
 
 **규정 업데이트 (JWT 인증 필요)**
-- `POST /upload-regulation` → 파일 업로드 → 텍스트 추출 → 임베딩 → DB 저장 (중복 체크 포함)
+- `POST /upload-regulation` → 파일 업로드 → 텍스트 추출 → 임베딩 → DB 저장 (중복 체크, 편 자동 분류)
 - `GET /uploaded-rules` → 업로드된 규정 목록 조회
 - `DELETE /uploaded-rules/{filename}` → 업로드된 규정 DB에서 삭제
 
@@ -116,24 +117,25 @@ Hansung_AX/
 
 ### login.html
 - 관리자 로그인 페이지 (`/login-page`)
-- 서버 `/login` API 호출 → JWT 토큰 발급
-- 로그인 성공 시 `localStorage`에 토큰 저장 → `/upload` 자동 이동
-- 이미 로그인(토큰 유효)된 경우 바로 업로드 페이지로 리다이렉트
+- 서버 `/login` API 호출 → JWT 토큰 localStorage 저장 → `/upload` 이동
+- 이미 로그인된 경우(유효 토큰) 바로 업로드 페이지 리다이렉트
 
 ### upload.html
 - 규정 파일 업로드 페이지 (`/upload`)
-- JWT 토큰 없거나 만료 시 자동으로 로그인 페이지로 이동
-- **다중 파일 업로드**: 여러 파일 동시 선택 또는 드래그 앤 드롭
-- 파일별 실시간 상태 표시 (대기 → 업로드 중 → 완료/실패)
-- 전체 진행바 표시
-- 업로드된 규정 목록 + 삭제 버튼 (DB에서 즉시 제거)
+- JWT 없거나 만료 시 자동으로 로그인 페이지 이동
+- 여러 파일 동시 선택 또는 드래그 앤 드롭
+- 파일별 실시간 상태 표시 + 전체 진행바
+- 업로드된 규정 목록 + 삭제 버튼
 
 ### index.html
 - 교직원/학생 모드 전환
   - 교직원 모드: 복무, 급여, 임용, 징계 관련 예시 질문 / 🔄 규정 업데이트 버튼 표시
   - 학생 모드: 학사, 장학, 졸업, 수강 관련 예시 질문 / 규정 업데이트 버튼 숨김
 - 왼쪽 사이드바: 대화 내역 저장 및 복원 (localStorage 영구 보관, 최대 30개)
-- 답변 카드: 타이핑 애니메이션 + 근거 조항 + 유사도 + 담당부서 + 추가질문 4개
+  - 항목 클릭 시 애니메이션 없이 즉시 답변 복원 (소스·관련질문 포함)
+  - 구버전 히스토리는 백그라운드 재조회 후 자동 업데이트
+  - 개별 삭제(hover 시 ✕ 표시) / 전체 삭제
+- 답변 카드: 타이핑 애니메이션 + 근거 조항 + 유사도 + 담당부서 + 관련질문 4개 버튼
 - 답변 PDF/Word 저장 버튼
 - 규정 목록 브라우저 (편별 분류 + 업로드 규정 통합 + 검색)
 - 📋 교직원 도구 탭 (교직원 모드에서만 표시): 문서 업로드 + 충돌 분석
@@ -142,8 +144,8 @@ Hansung_AX/
 - 교직원 전용 기능
 - PDF·DOCX·TXT·JSON 파일 업로드 → 기존 규정 DB와 비교 → 충돌 리포트 (높음/보통/낮음)
 - 답변 내용을 PDF 또는 DOCX 파일로 내보내기
-  - PDF: Windows malgun.ttf / Linux NanumGothic 자동 감지, 미발견 시 Helvetica 폴백
-  - DOCX: 맑은 고딕 폰트 강제 적용 (eastAsia 속성 포함)
+  - PDF: Windows malgun.ttf / Linux NanumGothic 자동 감지
+  - DOCX: 맑은 고딕 폰트 강제 적용
 
 ---
 
@@ -157,12 +159,11 @@ DATABASE_URL=postgresql://postgres:비밀번호@localhost:5432/hansungrules
 ADMIN_ID=admin
 ADMIN_PW=1234
 
-# JWT 서명 키 (32자 이상 권장, 미설정 시 서버 재시작마다 자동 생성)
+# JWT 서명 키 (32자 이상 권장)
 SECRET_KEY=여기에_랜덤_문자열_32자_이상
 ```
 
-- Groq API 키: https://console.groq.com → API Keys → Create (무료, 신용카드 불필요)
-- 비밀번호는 Docker 컨테이너 실행 시 설정한 값과 동일하게
+- Groq API 키: https://console.groq.com → API Keys → Create (무료)
 
 ---
 
@@ -171,24 +172,24 @@ SECRET_KEY=여기에_랜덤_문자열_32자_이상
 ### Step 1. .env 파일 생성
 위 `.env 설정` 참고하여 프로젝트 폴더에 `.env` 파일 생성
 
-### Step 2. 크롤링 (hansung_rules.json이 이미 있으면 생략 가능)
+### Step 2. 크롤링
 ```powershell
 python crawler.py
 ```
-- 약 20~30분 소요
-- 쿠키 만료 시 브라우저에서 새 쿠키 복사 후 crawler.py의 COOKIES 값 교체
+- 약 20~40분 소요 (첨부파일 다운로드 포함)
+- 쿠키 만료 시 아래 쿠키 갱신 방법 참고
 
 ### Step 2-1. 규정 코드 패치 (크롤링 후 최초 1회)
 ```powershell
 python patch_codes.py
 ```
 
-### Step 3. 벡터 DB 구축 (한 번만 실행)
+### Step 3. 벡터 DB 구축
 ```powershell
 python build_db.py
 ```
 - 첫 실행 시 임베딩 모델 자동 다운로드 (약 500MB, 1회만)
-- Docker 컨테이너가 실행 중이어야 함
+- Docker 컨테이너 실행 중이어야 함
 
 ### Step 4. 서버 실행
 ```powershell
@@ -203,22 +204,12 @@ uvicorn server:app --reload --port 8000
 ## 규정 업데이트 방법
 
 1. http://127.0.0.1:8000 접속 → **교직원 모드** 선택
-2. 상단 **🔄 규정 업데이트** 버튼 클릭
+2. 상단 nav에서 **📋 교직원 도구** 옆 **🔄 규정 업데이트** 클릭
 3. 관리자 로그인 (`admin` / `1234`, `.env`에서 변경 가능)
-4. 규정 파일 업로드 (PDF·DOCX·TXT·JSON, 여러 파일 동시 가능)
-5. 업로드 즉시 검색 DB에 반영
+4. 파일 업로드 (PDF·DOCX·TXT·JSON, 여러 파일 동시 가능)
+5. 업로드 즉시 Groq가 1~8편 자동 분류 → DB 등록 → 검색 반영
 
-**업로드된 규정 삭제:**
-업로드 페이지 하단 목록 → 삭제 버튼 → DB에서 즉시 제거
-
-**지원 형식:**
-
-| 형식 | 비고 |
-|------|------|
-| TXT | UTF-8 / CP949 / EUC-KR 자동 감지 |
-| JSON | `[{"title":..., "content":...}]` 또는 임의 구조 |
-| DOCX | 텍스트 기반 Word 문서 |
-| PDF | 텍스트 기반 PDF (스캔본 불가) |
+**업로드된 규정 삭제:** 업로드 페이지 하단 목록 → 삭제 버튼
 
 ---
 
@@ -227,12 +218,13 @@ uvicorn server:app --reload --port 8000
 | 기능 | 설명 |
 |------|------|
 | 규정 검색 | 벡터 + 키워드 하이브리드 검색, 멀티턴 대화 지원 |
-| 답변 형식 | 제목 + 본문 + 출처 + 담당부서 + 관련질문 4개 |
-| 대화 내역 | localStorage 영구 저장, 새로고침 후에도 유지 |
-| 규정 업데이트 | 파일 업로드 → 임베딩 → DB 즉시 반영, 중복 업로드 차단 |
-| 내보내기 | PDF (한글 폰트 자동 감지) / DOCX (맑은 고딕) |
+| HWP 첨부파일 | 규정 상세 첨부파일 텍스트 자동 추출 및 DB 반영 |
+| 답변 형식 | 제목 + 본문 + 출처 + 담당부서 + 관련질문 4개 버튼 |
+| 대화 내역 | localStorage 영구 저장, 클릭 시 즉시 복원 (소스 포함) |
+| 규정 업데이트 | 파일 업로드 → 자동 편 분류 → DB 즉시 반영, 중복 차단 |
+| 내보내기 | PDF / DOCX (한글 폰트 자동 처리) |
 | 충돌 분석 | 문서 업로드 → 기존 규정과 비교 → 심각도별 리포트 |
-| 모드 전환 | 교직원 / 학생 모드 (각 모드별 예시 질문, 버튼 노출 조건 상이) |
+| 모드 전환 | 교직원 / 학생 모드 (버튼 노출 조건, 예시 질문 상이) |
 
 ---
 
@@ -240,14 +232,14 @@ uvicorn server:app --reload --port 8000
 
 1. Chrome에서 rule.hansung.ac.kr 접속 후 아무 규정 클릭
 2. F12 → Network 탭 → F5 새로고침
-3. lawDetail.do 요청 클릭 → Headers → Cookie 값 전체 복사
-4. crawler.py의 COOKIES 딕셔너리 교체 후 재실행
+3. `lawDetail.do` 요청 클릭 → Request Headers → Cookie 값 전체 복사
+4. `crawler.py`의 `COOKIES` 딕셔너리 교체 후 재실행
 
 ---
 
 ## 코드 공유 시 주의사항
 
-- `.env` 파일은 절대 깃허브에 올리지 말 것 (`.gitignore`에 추가되어 있음)
+- `.env` 파일은 절대 깃허브에 올리지 말 것
 - 각자 Groq API 키 발급 필요 (무료, https://console.groq.com)
 - 각자 Docker Desktop 설치 및 컨테이너 실행 필요
 - 첫 실행 시 임베딩 모델 자동 다운로드 (인터넷 연결 필요)
@@ -270,10 +262,10 @@ uvicorn server:app --reload --port 8000
 
 | 컬럼 | 타입 | 설명 |
 |------|------|------|
-| id | TEXT | 고유 식별자 (기존 규정: 숫자, 업로드 규정: 타임스탬프 문자열) |
+| id | TEXT | 고유 식별자 (기존: 숫자, 업로드: 타임스탬프) |
 | rule_title | TEXT | 규정명 |
 | article | TEXT | 조항명 (업로드 규정은 제N조 자동 파싱) |
-| department | TEXT | 담당부서 |
-| url | TEXT | 원문 링크 (업로드 규정은 `upload://파일명`) |
-| content | TEXT | 조항 내용 |
+| department | TEXT | 담당부서 (업로드 규정: "업로드:N" 편 분류 태그) |
+| url | TEXT | 원문 링크 (업로드 규정: `upload://파일명`) |
+| content | TEXT | 조항 내용 (HWP 첨부파일 텍스트 포함) |
 | embedding | VECTOR(384) | 임베딩 벡터 |
