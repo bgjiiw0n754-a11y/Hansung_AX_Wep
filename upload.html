@@ -107,11 +107,11 @@ header .cur { color: #fff; font-weight: 600; font-size: 13px; }
          ondragover="event.preventDefault(); this.classList.add('drag')"
          ondragleave="this.classList.remove('drag')"
          ondrop="handleDrop(event)">
-      <input type="file" id="fileInput" accept=".pdf,.docx,.txt,.json"
+      <input type="file" id="fileInput" accept=".pdf,.docx,.txt,.json,.hwp,.hwpx"
              multiple style="display:none" onchange="onFilesChosen(this)">
       <div class="file-zone-icon">📁</div>
       <p><strong>클릭하거나 파일을 드래그하세요</strong><br>여러 파일 동시 선택 가능</p>
-      <div class="file-ext">PDF · DOCX · TXT · JSON 지원</div>
+      <div class="file-ext">PDF · DOCX · TXT · JSON · HWP · HWPX 지원</div>
     </div>
 
     <!-- 선택된 파일 목록 -->
@@ -182,7 +182,7 @@ function handleDrop(e) {
 }
 
 function addFiles(newFiles) {
-  var allowed = ['.pdf', '.docx', '.txt', '.json'];
+  var allowed = ['.pdf', '.docx', '.txt', '.json', '.hwp', '.hwpx'];
   newFiles.forEach(function(f) {
     var ext = '.' + f.name.split('.').pop().toLowerCase();
     if (!allowed.includes(ext)) return;                      // 지원 형식만

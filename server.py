@@ -262,6 +262,56 @@ def _extract_text(file: UploadFile) -> str:
         doc = DocxDoc(io.BytesIO(data))
         return "\n".join(p.text for p in doc.paragraphs if p.text.strip())
 
+    if fname.endswith(".hwpx"):
+        import zipfile
+        texts = []
+        try:
+            with zipfile.ZipFile(io.BytesIO(data)) as z:
+                section_files = sorted([f for f in z.namelist()
+                    if _re.match(r'Contents/[Ss]ection\d+\.xml', f)])
+                if not section_files:
+                    section_files = [f for f in z.namelist()
+                        if f.endswith('.xml') and 'section' in f.lower()]
+                from bs4 import BeautifulSoup as _BS
+                for sf in section_files:
+                    try:
+                        soup = _BS(z.read(sf), "xml")
+                    except Exception:
+                        soup = _BS(z.read(sf), "html.parser")
+                    for tag in soup.find_all(_re.compile(r'(?:hp:)?t$')):
+                        if tag.get_text().strip():
+                            texts.append(tag.get_text())
+        except Exception as e:
+            raise HTTPException(400, f"HWPX 추출 실패: {e}")
+        return "\n".join(texts)
+
+    if fname.endswith(".hwp"):
+        import tempfile, subprocess, sys, os as _os
+        tmp = _os.path.join(tempfile.gettempdir(), f"hsu_hwp_{_os.getpid()}.hwp")
+        try:
+            with open(tmp, "wb") as f:
+                f.write(data)
+            # pyhwp 0.1b15 실제 모듈명은 hwp5
+            scripts_dir = _os.path.join(_os.path.dirname(sys.executable), "Scripts")
+            for cmd in [
+                [_os.path.join(scripts_dir, "hwp5txt.exe"), tmp],
+                ["hwp5txt", tmp],
+                [sys.executable, "-m", "hwp5.hwp5txt", tmp],
+            ]:
+                try:
+                    result = subprocess.run(cmd, capture_output=True, timeout=60,
+                                            encoding="utf-8", errors="replace")
+                    if result.returncode == 0 and result.stdout.strip():
+                        return result.stdout.strip()
+                except (FileNotFoundError, OSError):
+                    continue
+                except Exception:
+                    continue
+            raise HTTPException(400, "HWP 추출 실패. hwp5txt 명령어를 확인하세요.")
+        finally:
+            try: _os.unlink(tmp)
+            except Exception: pass
+
     if fname.endswith(".json"):
         try:
             items = _json.loads(data.decode("utf-8"))

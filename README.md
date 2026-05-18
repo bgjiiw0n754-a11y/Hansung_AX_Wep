@@ -147,7 +147,7 @@ Hansung_AX/
 
 ### routers/teacher.py
 - 교직원 전용 기능
-- PDF·DOCX·TXT·JSON 파일 업로드 → 기존 규정 DB와 비교 → 충돌 리포트 (높음/보통/낮음)
+- HWP·PDF·DOCX·TXT·JSON 파일 업로드 → 기존 규정 DB와 비교 → 충돌 리포트 (높음/보통/낮음)
 - 답변 내용을 PDF 또는 DOCX 파일로 내보내기
   - PDF: Windows malgun.ttf / Linux NanumGothic 자동 감지
   - DOCX: 맑은 고딕 폰트 강제 적용
@@ -236,7 +236,7 @@ http://127.0.0.1:8000
 1. http://127.0.0.1:8000 접속 → **교직원 모드** 선택
 2. nav에서 **🔄 규정 업데이트** 클릭 (📋 교직원 도구 바로 옆)
 3. 관리자 로그인 (`admin` / `1234`, `.env`에서 변경 가능)
-4. 파일 업로드 (PDF·DOCX·TXT·JSON, 여러 파일 동시 가능)
+4. 파일 업로드 (HWP·PDF·DOCX·TXT·JSON, 여러 파일 동시 가능)
 5. 업로드 즉시 Groq가 1~8편 자동 분류 → DB 등록 → 검색 반영
 
 **업로드된 규정 삭제:** 업로드 페이지 하단 목록 → 삭제 버튼

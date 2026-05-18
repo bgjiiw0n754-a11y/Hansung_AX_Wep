@@ -312,9 +312,9 @@ body.mode-staff #nav-teacher { display: block; }
            ondragover="event.preventDefault();this.classList.add('drag')"
            ondragleave="this.classList.remove('drag')"
            ondrop="handleDrop(event)">
-        <input type="file" id="conflictFileInput" accept=".pdf,.docx,.txt" style="display:none" onchange="handleFileSelect(this)">
+        <input type="file" id="conflictFileInput" accept=".pdf,.docx,.txt,.hwp,.hwpx" style="display:none" onchange="handleFileSelect(this)">
         <div class="upload-zone-icon">📄</div>
-        <p><strong>클릭하거나 파일을 드래그하세요</strong><br>PDF · DOCX · TXT 지원</p>
+        <p><strong>클릭하거나 파일을 드래그하세요</strong><br>PDF · DOCX · TXT · HWP · HWPX 지원</p>
       </div>
       <div class="conflict-loading" id="conflictLoading"><div class="spinner"></div>규정과 비교 분석 중...</div>
       <div id="conflictResult"></div>
