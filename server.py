@@ -723,6 +723,74 @@ def get_rules():
     return {"chapters": result, "total": sum(len(c["rules"]) for c in result)}
 
 
+# ── 규정 내용 키워드 검색 ──────────────────────────────────────────
+@app.post("/search-rules")
+def search_rules(req: Q):
+    q = req.question.strip()
+    if not q:
+        raise HTTPException(400, "Empty query")
+
+    keywords = [w for w in q.split() if len(w) >= 2]
+    if not keywords:
+        keywords = [q]
+
+    try:
+        conn = psycopg2.connect(DB_URL)
+        cur  = conn.cursor()
+        rows = []
+        seen = set()
+
+        for kw in keywords[:5]:
+            # 규정명 매칭
+            cur.execute("""
+                SELECT rule_title, article, department, url, content
+                FROM rule_chunks WHERE rule_title LIKE %s LIMIT 20
+            """, (f"%{kw}%",))
+            for r in cur.fetchall():
+                key = (r[0], r[1])
+                if key not in seen:
+                    rows.append(r); seen.add(key)
+
+            # 본문 매칭
+            cur.execute("""
+                SELECT rule_title, article, department, url, content
+                FROM rule_chunks WHERE content LIKE %s OR article LIKE %s LIMIT 30
+            """, (f"%{kw}%", f"%{kw}%"))
+            for r in cur.fetchall():
+                key = (r[0], r[1])
+                if key not in seen:
+                    rows.append(r); seen.add(key)
+
+        conn.close()
+    except Exception as e:
+        raise HTTPException(500, f"DB error: {e}")
+
+    if not rows:
+        return {"results": [], "query": q}
+
+    # 규정명 단위로 그룹핑
+    from collections import defaultdict as _dd
+    grouped = _dd(list)
+    for r in rows:
+        grouped[r[0]].append({
+            "article":    r[1],
+            "department": r[2],
+            "url":        r[3] or "",
+            "snippet":    r[4][:200].strip(),
+        })
+
+    results = []
+    for title, chunks in grouped.items():
+        results.append({
+            "title":      title,
+            "department": chunks[0]["department"],
+            "url":        chunks[0]["url"],
+            "chunks":     chunks[:3]
+        })
+
+    return {"results": results[:20], "query": q}
+
+
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8080)
+    uvicorn.run(app, host="0.0.0.0", port=8000)

@@ -139,10 +139,31 @@ textarea::placeholder { color: #B0BDD4; }
 .followup-arrow { color: #C5D4ED; font-size: 14px; flex-shrink: 0; }
 .followup-item:hover .followup-arrow { color: #003087; }
 
-/* 규정 목록 */
-.rules-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+/* 규정 시맨틱 검색 결과 */
+.srule-card { background: #fff; border: 1px solid #D1DCF0; border-radius: 12px; margin-bottom: 8px; overflow: hidden; transition: border-color 0.15s; }
+.srule-card:hover { border-color: #0050B3; }
+.srule-header { display: flex; align-items: center; gap: 10px; padding: 13px 16px; cursor: pointer; }
+.srule-info { flex: 1; min-width: 0; }
+.srule-title { font-size: 13px; font-weight: 700; color: #1A2340; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.srule-dept { font-size: 11px; color: #6B7A99; margin-top: 2px; }
+.srule-preview { color: #9EADC8; font-weight: 400; }
+.kw-highlight { background: none; color: #C0392B; font-weight: 700; }
+.srule-score { font-size: 11px; font-weight: 700; color: #0050B3; background: #EEF3FB; padding: 2px 8px; border-radius: 8px; white-space: nowrap; flex-shrink: 0; }
+.srule-link { font-size: 11px; color: #0050B3; text-decoration: none; white-space: nowrap; flex-shrink: 0; }
+.srule-link:hover { text-decoration: underline; }
+.srule-chunks { border-top: 1px solid #F0F4FA; display: none; background: #FAFCFF; }
+.srule-card.open .srule-chunks { display: block; }
+.srule-chunk { padding: 10px 16px; border-bottom: 1px solid #F0F4FA; }
+.srule-chunk:last-child { border-bottom: none; }
+.srule-chunk-art { font-size: 11px; font-weight: 700; color: #003087; margin-bottom: 4px; }
+.srule-chunk-text { font-size: 12px; color: #6B7A99; line-height: 1.7; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
+.srule-empty { text-align: center; padding: 40px; color: #B0BDD4; font-size: 14px; }
+.search-mode-tabs { display: flex; align-items: center; gap: 6px; margin-bottom: 14px; }
+.smode-tab { padding: 6px 16px; border-radius: 20px; font-size: 12px; font-weight: 600; cursor: pointer; border: 1.5px solid #D1DCF0; background: #fff; color: #6B7A99; transition: all 0.15s; font-family: 'Noto Sans KR', sans-serif; }
+.smode-tab.active { background: #003087; color: #fff; border-color: #003087; }
+.rules-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
 .rules-title { font-size: 18px; font-weight: 700; color: var(--text); }
-.rules-count { font-size: 13px; color: var(--text-muted); background: var(--blue-pale); padding: 4px 12px; border-radius: 20px; border: 1px solid var(--blue-border); }
+.rules-count { font-size: 12px; color: var(--text-muted); background: var(--blue-pale); padding: 4px 12px; border-radius: 20px; border: 1px solid var(--blue-border); white-space: nowrap; }
 .rules-search { display: flex; align-items: center; gap: 10px; background: var(--white); border: 1px solid var(--border); border-radius: 10px; padding: 10px 16px; margin-bottom: 20px; box-shadow: 0 1px 6px rgba(0,48,135,0.05); }
 .rules-search input { flex: 1; border: none; outline: none; font-family: 'Noto Sans KR', sans-serif; font-size: 14px; color: var(--text); background: transparent; }
 .rules-search input::placeholder { color: #B0BDD4; }
@@ -305,10 +326,21 @@ body.mode-staff #nav-teacher { display: block; }
         <div class="rules-title">전체 규정 목록</div>
         <div class="rules-count" id="rulesCount">로딩 중...</div>
       </div>
+
       <div class="rules-search">
         <span class="rules-search-icon">🔍</span>
-        <input type="text" id="ruleSearch" placeholder="규정명 또는 담당부서 검색..." oninput="filterRules()">
+        <input type="text" id="ruleSearch" placeholder="규정명, 담당부서, 본문 내용으로 검색..."
+               oninput="handleRuleSearch()" onkeydown="if(event.key==='Enter') handleRuleSearch()">
+        <button id="ruleSearchClear" onclick="clearRuleSearch()"
+                style="display:none;border:none;background:none;color:#B0BDD4;cursor:pointer;font-size:16px;padding:0 4px;">✕</button>
       </div>
+
+      <!-- 검색 결과 -->
+      <div id="searchResultsWrap" style="display:none">
+        <div id="semanticResults"></div>
+      </div>
+
+      <!-- 기본 목록 -->
       <div id="rulesList"><div class="rules-loading"><div class="spinner"></div>규정 목록을 불러오는 중...</div></div>
     </div>
   </main>
@@ -502,6 +534,100 @@ function setMode(mode) {
     const t = document.getElementById('nav-teacher');
     if (t && t.classList.contains('active')) document.querySelector('.nav-item').click();
   }
+}
+
+/* ── 규정 통합 검색 ── */
+let searchTimer = null;
+
+function handleRuleSearch() {
+  const q = document.getElementById('ruleSearch').value.trim();
+  const clearBtn = document.getElementById('ruleSearchClear');
+  clearBtn.style.display = q ? 'block' : 'none';
+
+  clearTimeout(searchTimer);
+  if (!q) {
+    clearRuleSearch();
+    return;
+  }
+  // 300ms 디바운스
+  searchTimer = setTimeout(() => runUnifiedSearch(q), 300);
+}
+
+function clearRuleSearch() {
+  document.getElementById('ruleSearch').value = '';
+  document.getElementById('ruleSearchClear').style.display = 'none';
+  document.getElementById('searchResultsWrap').style.display = 'none';
+  document.getElementById('rulesList').style.display = '';
+  document.getElementById('rulesCount').textContent = rulesData ? `총 ${rulesData.total}개 규정` : '로딩 중...';
+}
+
+async function runUnifiedSearch(q) {
+  const wrap = document.getElementById('searchResultsWrap');
+  const el   = document.getElementById('semanticResults');
+  const list = document.getElementById('rulesList');
+
+  wrap.style.display = '';
+  list.style.display = 'none';
+  el.innerHTML = '<div class="rules-loading"><div class="spinner"></div>검색 중...</div>';
+
+  try {
+    const res = await fetch(`${API}/search-rules`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question: q })
+    });
+    if (!res.ok) throw new Error('검색 실패');
+    const data = await res.json();
+
+    document.getElementById('rulesCount').textContent =
+      data.results.length ? `${data.results.length}개 검색됨` : '검색 결과 없음';
+
+    if (!data.results.length) {
+      el.innerHTML = '<div class="srule-empty">관련 규정을 찾지 못했습니다.</div>';
+      return;
+    }
+
+    el.innerHTML = data.results.map((r, i) => {
+      const title = r.title.length > 40 ? r.title.slice(0, 40) + '…' : r.title;
+      const preview = r.chunks[0]?.snippet ? highlightKeywords(r.chunks[0].snippet.slice(0,60), q) + '…' : '';
+      return `
+      <div class="srule-card open" id="sr-${i}">
+        <div class="srule-header" onclick="toggleSrule(${i})">
+          <div class="srule-info">
+            <div class="srule-title">${title}</div>
+            <div class="srule-dept">${r.department || ''}${preview ? ` · <span class="srule-preview">${preview}</span>` : ''}</div>
+          </div>
+          ${r.url ? `<a class="srule-link" href="${r.url}" target="_blank" onclick="event.stopPropagation()">원문 →</a>` : ''}
+        </div>
+        <div class="srule-chunks">
+          ${r.chunks.map(c => `
+            <div class="srule-chunk">
+              <div class="srule-chunk-art">${c.article}</div>
+              <div class="srule-chunk-text">${highlightKeywords(c.snippet, q)}</div>
+            </div>`).join('')}
+        </div>
+      </div>`;
+    }).join('');
+
+    // 모두 열린 상태로 시작
+  } catch(e) {
+    el.innerHTML = `<div class="srule-empty">오류: ${e.message}</div>`;
+  }
+}
+
+function highlightKeywords(text, q) {
+  if (!text || !q) return text;
+  const keywords = q.split(' ').filter(w => w.length >= 2);
+  let result = text;
+  keywords.forEach(kw => {
+    const escaped = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    result = result.replace(new RegExp(escaped, 'gi'),
+      m => `<mark class="kw-highlight">${m}</mark>`);
+  });
+  return result;
+}
+
+function toggleSrule(i) {
+  document.getElementById('sr-' + i)?.classList.toggle('open');
 }
 
 /* ── 규정 목록 ── */
