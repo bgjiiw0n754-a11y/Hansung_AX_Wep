@@ -12,22 +12,45 @@
   --text: #1A2340; --text-muted: #6B7A99; --border: #D1DCF0;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { margin: 0 !important; padding: 0 !important; }
 body { font-family: 'Noto Sans KR', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
 
-header { background: linear-gradient(135deg, #002070 0%, #003087 50%, #0050B3 100%); position: relative; overflow: hidden; }
-header::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, #60A5FA, #93C5FD, #60A5FA); }
-.header-inner { max-width: 960px; margin: 0 auto; padding: 32px 32px 28px; display: flex; align-items: center; justify-content: space-between; position: relative; }
-.header-left { flex: 1; }
-.header-badge { display: inline-flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.2); color: #93C5FD; font-size: 10px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; padding: 4px 12px; border-radius: 20px; margin-bottom: 14px; }
-header h1 { font-size: 32px; font-weight: 700; color: #fff; line-height: 1.25; margin-bottom: 8px; letter-spacing: -0.5px; }
+header {
+  background:
+    radial-gradient(ellipse 45% 80% at 93% 10%, rgba(249,115,22,0.20) 0%, transparent 68%),
+    radial-gradient(ellipse 60% 100% at 50% -10%, rgba(96,165,250,0.16) 0%, transparent 65%),
+    linear-gradient(148deg, #001254 0%, #002070 35%, #003899 70%, #0050B8 100%);
+  position: relative; overflow: hidden;
+}
+header::before {
+  content:''; position:absolute; width:520px; height:520px; border-radius:50%;
+  background:rgba(255,255,255,0.025); top:-220px; right:-100px; pointer-events:none;
+}
+header::after {
+  content:''; position:absolute; bottom:0; left:0; right:0; height:2px;
+  background:linear-gradient(90deg, transparent 0%, #60A5FA 28%, #F97316 58%, transparent 100%);
+}
+header .grid-overlay {
+  position:absolute; inset:0; pointer-events:none;
+  background-image: linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+                    linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+.header-inner { max-width: 1400px; margin: 0 auto; padding: 40px 48px 36px; display: flex; align-items: center; justify-content: space-between; position: relative; gap: 32px; }
+.header-left { flex: 1; text-align: left; }
+.header-badge { display: inline-flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.2); color: #93C5FD; font-size: 11px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; padding: 5px 14px; border-radius: 20px; margin-bottom: 18px; }
+header h1 { font-size: 48px; font-weight: 800; color: #fff; line-height: 1.2; margin-bottom: 12px; letter-spacing: -1px; text-align: left; }
 header h1 span { color: #93C5FD; }
-header p { font-size: 13px; color: rgba(255,255,255,0.6); font-weight: 300; }
+header p { font-size: 15px; color: rgba(255,255,255,0.72); font-weight: 300; text-align: left; }
 .header-logo { display: flex; flex-direction: column; align-items: center; gap: 6px; flex-shrink: 0; margin-left: 32px; }
-.logo-mark { width: 100px; height: 100px; background: rgba(255,255,255,0.95); border-radius: 50%; padding: 6px; display: flex; align-items: center; justify-content: center; }
-.logo-mark img { width: 90px; height: 90px; object-fit: contain; }
-.mode-toggle { display: inline-flex; align-items: center; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 24px; padding: 3px; gap: 2px; margin-top: 16px; }
-.mode-btn { font-size: 12px; font-weight: 600; color: rgba(255,255,255,0.55); padding: 6px 16px; border-radius: 20px; cursor: pointer; transition: all 0.2s; user-select: none; }
-.mode-btn.active { background: #fff; color: var(--blue); }
+.logo-mark { width: 150px; height: 150px; background: rgba(255,255,255,0.95); border-radius: 50%; padding: 8px; display: flex; align-items: center; justify-content: center; box-shadow: 0 8px 32px rgba(0,0,0,0.25); }
+.logo-mark img { width: 134px; height: 134px; object-fit: contain; }
+.mode-toggle { display: inline-flex; align-items: center; background: rgba(255,255,255,0.10); border: 1px solid rgba(255,255,255,0.20); border-radius: 28px; padding: 3px; gap: 2px; margin-top: 16px; box-shadow: 0 2px 12px rgba(0,0,0,0.15); }
+.mode-btn { font-size: 12px; font-weight: 600; color: rgba(255,255,255,0.55); padding: 6px 16px; border-radius: 20px; cursor: pointer; transition: all 0.22s; user-select: none; white-space: nowrap; }
+.mode-btn.active { background: linear-gradient(135deg, #003087, #0050B3); color: #fff; box-shadow: 0 2px 10px rgba(0,48,135,0.40); }
+.mode-btn:not(.active):hover { background: rgba(255,255,255,0.15); color: rgba(255,255,255,0.9); }
+#btnAdmin { border: 1px solid rgba(255,255,255,0.3); }
+#btnAdmin:hover { background: rgba(255,255,255,0.2); color: #fff; }
 
 .nav-bar { background: #001E5C; border-bottom: 1px solid rgba(255,255,255,0.08); }
 .nav-inner { max-width: 960px; margin: 0 auto; padding: 0 32px; display: flex; align-items: center; }
@@ -36,34 +59,36 @@ header p { font-size: 13px; color: rgba(255,255,255,0.6); font-weight: 300; }
 .nav-item:hover { color: rgba(255,255,255,0.85); }
 .nav-spacer { flex: 1; }
 
-/* 규정 업데이트 버튼 — 교직원 도구 바로 옆, 동일 스타일 */
-#nav-update { display: none; }
-body.mode-staff #nav-update { display: block; }
 
 /* 앱 레이아웃 */
 .app-body { display: flex; min-height: calc(100vh - 160px); }
 
 /* 사이드바 */
-.sidebar { width: 52px; min-width: 52px; background: #fff; border-right: 1px solid #D1DCF0; transition: width 0.28s cubic-bezier(0.4,0,0.2,1); overflow: hidden; flex-shrink: 0; box-shadow: 2px 0 12px rgba(0,48,135,0.06); position: sticky; top: 0; height: 100vh; }
-.sidebar.open { width: 260px; }
-.sidebar-toggle { width: 52px; height: 52px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 18px; color: #6B7A99; border-bottom: 1px solid #D1DCF0; transition: background 0.15s; }
-.sidebar-toggle:hover { background: #EEF3FB; color: #003087; }
-.sidebar-content { opacity: 0; pointer-events: none; transition: opacity 0.15s; min-width: 260px; padding: 12px; }
+.sidebar { width: 64px; min-width: 64px; background: #fff; border-right: 1px solid #D1DCF0; transition: width 0.28s cubic-bezier(0.4,0,0.2,1); overflow: hidden; flex-shrink: 0; box-shadow: 2px 0 16px rgba(0,48,135,0.07); position: sticky; top: 0; height: 100vh; }
+.sidebar.open { width: 272px; }
+.sidebar-toggle { width: 64px; height: 64px; display: flex; align-items: center; justify-content: center; cursor: pointer; border-bottom: 1px solid #EEF3FB; transition: background 0.18s; }
+.sidebar-toggle-icon { width: 36px; height: 36px; border-radius: 50%; background: #F0F4FA; display: flex; align-items: center; justify-content: center; font-size: 16px; color: #6B7A99; transition: all 0.18s; box-shadow: 0 1px 4px rgba(0,48,135,0.08); }
+.sidebar-toggle:hover .sidebar-toggle-icon { background: #EEF3FB; color: #003087; box-shadow: 0 2px 8px rgba(0,48,135,0.14); transform: scale(1.07); }
+.sidebar-content { opacity: 0; pointer-events: none; transition: opacity 0.15s; min-width: 272px; padding: 14px 12px; text-align: left; }
 .sidebar.open .sidebar-content { opacity: 1; pointer-events: auto; transition: opacity 0.22s 0.1s; }
-.sidebar-title { font-size: 10px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: #6B7A99; margin-bottom: 10px; padding: 4px 4px 8px; border-bottom: 1px solid #D1DCF0; display: flex; justify-content: space-between; align-items: center; }
-.sidebar-clear { font-size: 10px; color: #B0BDD4; cursor: pointer; }
-.sidebar-clear:hover { color: #E24B4A; }
-.history-item { padding: 9px 10px; border-radius: 8px; cursor: pointer; margin-bottom: 4px; transition: background 0.13s; overflow: hidden; display: flex; align-items: center; gap: 4px; }
-.history-item:hover { background: #EEF3FB; }
-.history-item.active { background: #EEF3FB; border-left: 3px solid #003087; }
+.sidebar-title { font-size: 10px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: #6B7A99; margin-bottom: 12px; padding: 4px 6px 10px; border-bottom: 1px solid #EEF3FB; display: flex; justify-content: space-between; align-items: center; }
+.sidebar-clear { font-size: 10px; color: #B0BDD4; cursor: pointer; padding: 3px 8px; border-radius: 20px; transition: all 0.15s; }
+.sidebar-clear:hover { color: #E24B4A; background: #FFF0F0; }
+.history-item { padding: 9px 10px; border-radius: 14px; cursor: pointer; margin-bottom: 5px; transition: all 0.15s; overflow: hidden; display: flex; align-items: center; gap: 6px; border: 1px solid transparent; }
+.history-item:hover { background: #EEF3FB; border-color: #D1DCF0; }
+.history-item.active { background: #EEF3FB; border-color: #C5D4ED; border-left: 3px solid #003087; }
 .history-item-body { flex: 1; min-width: 0; cursor: pointer; }
-.history-q { font-size: 12px; font-weight: 500; color: #1A2340; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.history-time { font-size: 10px; color: #6B7A99; margin-top: 2px; }
-.history-del-btn { flex-shrink: 0; width: 18px; height: 18px; border: none; background: none; color: #C5D4ED; cursor: pointer; font-size: 11px; padding: 0; line-height: 1; border-radius: 4px; display: flex; align-items: center; justify-content: center; opacity: 0; transition: all 0.15s; }
+.history-icon { width: 28px; height: 28px; border-radius: 50%; background: #F0F4FA; display: flex; align-items: center; justify-content: center; font-size: 12px; flex-shrink: 0; color: #6B7A99; transition: background 0.15s; }
+.history-item:hover .history-icon { background: #D7E6FF; color: #003087; }
+.history-item.active .history-icon { background: #C5D4ED; color: #003087; }
+.history-q { font-size: 12px; font-weight: 500; color: #1A2340; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
+.history-time { font-size: 10px; color: #6B7A99; margin-top: 2px; text-align: left; }
+.history-del-btn { flex-shrink: 0; width: 22px; height: 22px; border: none; background: none; color: #C5D4ED; cursor: pointer; font-size: 12px; padding: 0; line-height: 1; border-radius: 50%; display: flex; align-items: center; justify-content: center; opacity: 0; transition: all 0.15s; }
 .history-item:hover .history-del-btn { opacity: 1; }
 .history-del-btn:hover { background: #FFF0F0; color: #C0392B; }
 
-main { flex: 1; min-width: 0; max-width: 960px; margin: 0 auto; padding: 28px 32px 60px; }
+main { flex: 1; min-width: 0; max-width: none; margin: 0; padding: 28px 32px 60px; width: 100%; transition: padding 0.25s; }
+main.chat-mode { padding: 12px 48px 24px; }
 .page { display: none; }
 .page.active { display: block; }
 
@@ -84,9 +109,7 @@ main { flex: 1; min-width: 0; max-width: 960px; margin: 0 auto; padding: 28px 32
 textarea { flex: 1; border: 1.5px solid var(--border); border-radius: 10px; padding: 13px 16px; font-family: 'Noto Sans KR', sans-serif; font-size: 15px; resize: none; height: 80px; transition: border-color 0.2s; background: #F8FAFD; color: var(--text); line-height: 1.6; }
 textarea:focus { outline: none; border-color: var(--blue-mid); background: #fff; }
 textarea::placeholder { color: #B0BDD4; }
-#askBtn { background: linear-gradient(150deg, #003087, #0060CC); color: #fff; border: none; border-radius: 10px; padding: 0 24px; font-family: 'Noto Sans KR', sans-serif; font-size: 15px; font-weight: 700; cursor: pointer; transition: all 0.2s; white-space: nowrap; min-width: 80px; }
-#askBtn:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(0,48,135,0.35); }
-#askBtn:disabled { opacity: 0.55; cursor: not-allowed; transform: none; box-shadow: none; }
+#askBtn:disabled { opacity: 0.55; cursor: not-allowed; }
 .chips { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 7px; }
 .chip { background: var(--blue-pale); border: 1px solid var(--blue-border); border-radius: 20px; padding: 5px 13px; font-size: 12px; font-weight: 500; color: var(--blue); cursor: pointer; transition: all 0.15s; }
 .chip:hover { background: var(--blue); color: #fff; border-color: var(--blue); }
@@ -191,30 +214,6 @@ textarea::placeholder { color: #B0BDD4; }
 .rules-loading { text-align: center; padding: 40px; color: var(--text-muted); font-size: 13px; }
 .no-result { text-align: center; padding: 40px; color: var(--text-muted); font-size: 14px; }
 
-/* 교직원 도구 */
-#nav-teacher { display: none; }
-body.mode-staff #nav-teacher { display: block; }
-.upload-zone { border: 2px dashed #C5D4ED; border-radius: 14px; background: #fff; padding: 48px 24px; text-align: center; cursor: pointer; transition: all 0.2s; margin-bottom: 20px; }
-.upload-zone:hover, .upload-zone.drag { border-color: #0050B3; background: #EEF3FB; }
-.upload-zone-icon { font-size: 40px; margin-bottom: 12px; }
-.upload-zone p { font-size: 14px; color: #6B7A99; line-height: 1.8; }
-.conflict-loading { display: none; text-align: center; padding: 40px; color: #6B7A99; font-size: 13px; }
-.conflict-card { background: #fff; border-radius: 14px; border: 1px solid #D1DCF0; overflow: hidden; margin-bottom: 16px; box-shadow: 0 2px 16px rgba(0,48,135,0.06); animation: fadeUp 0.3s ease; }
-.conflict-header { background: linear-gradient(90deg, #EEF3FB, #F5F8FD); padding: 14px 22px; border-bottom: 1px solid #D1DCF0; display: flex; align-items: center; gap: 12px; }
-.conflict-icon { width: 32px; height: 32px; background: #E24B4A; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 16px; flex-shrink: 0; }
-.conflict-summary { padding: 18px 22px; font-size: 14px; line-height: 1.9; color: #1A2340; border-bottom: 1px solid #D1DCF0; }
-.conflict-list { padding: 16px 22px; }
-.conflict-item { display: flex; gap: 12px; padding: 12px 14px; border-radius: 10px; border: 1px solid #D1DCF0; margin-bottom: 8px; background: #F8FAFD; }
-.conflict-item:last-child { margin-bottom: 0; }
-.severity { font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 6px; white-space: nowrap; flex-shrink: 0; margin-top: 2px; }
-.sev-high { background: #FCEBEB; color: #A32D2D; }
-.sev-mid  { background: #FAEEDA; color: #633806; }
-.sev-low  { background: #EAF3DE; color: #27500A; }
-.conflict-detail .reg { font-size: 13px; font-weight: 700; color: #1A2340; }
-.conflict-detail .art { font-size: 11px; color: #6B7A99; margin-top: 1px; }
-.conflict-detail .iss { font-size: 13px; color: #1A2340; margin-top: 6px; line-height: 1.7; }
-.conflict-rec { padding: 16px 22px; background: #EEF3FB; border-top: 1px solid #D1DCF0; font-size: 13px; line-height: 1.8; }
-.conflict-rec strong { color: #003087; display: block; margin-bottom: 4px; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; }
 .export-bar { display: flex; gap: 8px; padding: 12px 22px; border-top: 1px solid #D1DCF0; background: #F8FAFD; }
 .export-btn { display: flex; align-items: center; gap: 6px; padding: 7px 16px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; border: 1.5px solid #C5D4ED; background: #fff; color: #003087; transition: all 0.15s; font-family: 'Noto Sans KR', sans-serif; }
 .export-btn:hover { background: #003087; color: #fff; border-color: #003087; }
@@ -225,26 +224,151 @@ body.mode-staff #nav-teacher { display: block; }
   header h1 { font-size: 26px; }
   .header-logo { display: none; }
   .search-row { flex-direction: column; }
-  #askBtn { height: 46px; }
   main { padding: 20px 16px 60px; }
+  main.chat-mode { padding: 12px 16px 16px; }
   .header-inner { padding: 24px 16px 20px; }
   .rule-dept { display: none; }
   .followup-grid { grid-template-columns: 1fr; }
-
+  .chat-input-wrap { left: 64px !important; padding: 10px 16px 8px; }
+  body.sidebar-open .chat-input-wrap { left: 64px !important; }
 }
+/* ── Diff Modal ── */
+.diff-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:9999; display:none; align-items:center; justify-content:center; padding:16px; }
+.diff-overlay.open { display:flex; }
+.diff-modal { background:#fff; border-radius:16px; width:100%; max-width:1100px; max-height:92vh; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 24px 64px rgba(0,0,0,0.3); }
+.diff-head { padding:16px 22px; border-bottom:1px solid #D1DCF0; display:flex; align-items:center; gap:12px; background:linear-gradient(90deg,#EEF3FB,#F5F8FD); flex-shrink:0; }
+.diff-head-title { font-size:15px; font-weight:700; color:#1A2340; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.diff-ver-select { padding:5px 10px; border:1.5px solid #C5D4ED; border-radius:8px; font-family:'Noto Sans KR',sans-serif; font-size:12px; color:#1A2340; }
+.diff-close { width:30px; height:30px; border:none; background:#F0F4FA; border-radius:50%; cursor:pointer; font-size:15px; color:#6B7A99; flex-shrink:0; }
+.diff-close:hover { background:#E24B4A; color:#fff; }
+.diff-cols { display:grid; grid-template-columns:1fr 1fr; flex:1; overflow:hidden; }
+.diff-col { display:flex; flex-direction:column; overflow:hidden; }
+.diff-col + .diff-col { border-left:2px solid #D1DCF0; }
+.diff-col-head { padding:10px 16px; font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; border-bottom:1px solid #D1DCF0; flex-shrink:0; }
+.diff-col-old .diff-col-head { background:#FFF5F5; color:#A32D2D; }
+.diff-col-new .diff-col-head { background:#F0FFF4; color:#276749; }
+.diff-col-body { flex:1; overflow-y:auto; padding:16px; font-size:13px; line-height:2.1; font-family:'Noto Sans KR',sans-serif; white-space:pre-wrap; color:#1A2340; }
+.diff-art-sep { margin:14px 0 6px; padding:5px 10px; background:#EEF3FB; border-radius:6px; font-size:11px; font-weight:700; color:#003087; white-space:normal; }
+mark.diff-del { background:#FFCDD2; color:#B71C1C; border-radius:2px; padding:0 1px; }
+mark.diff-add { background:#C8E6C9; color:#1B5E20; border-radius:2px; padding:0 1px; }
+.diff-spin { text-align:center; padding:48px; color:#6B7A99; font-size:13px; }
+.diff-empty { text-align:center; padding:48px; color:#B0BDD4; font-size:14px; }
+
+/* ══ 대화형 챗봇 ══ */
+.chat-wrap { display: flex; flex-direction: column; min-height: calc(100vh - 260px);
+  max-width: 880px; width: 100%; margin: 0 auto; }
+/* 추천 화면(빈 채팅)일 때는 페이지 스크롤 자체를 막아 깔끔하게 한 화면에 */
+body.chat-empty .scroll-jump { display: none !important; }
+body.chat-empty .chat-wrap { min-height: 0; }
+body.chat-empty main { padding-top: 8px; padding-bottom: 8px; }
+.chat-stream { flex: 1; padding: 8px 4px 16px; min-height: 0; }
+div.chat-empty { text-align: center; padding: 64px 24px; color: var(--text-muted); }
+div.chat-empty .chat-empty-icon { font-size: 44px; margin-bottom: 14px; opacity: 0.35; }
+div.chat-empty p { font-size: 14px; line-height: 1.85; }
+
+/* 빈 화면 — 추천 질문 카드 */
+.chat-welcome { padding: 20px 8px 12px; max-width: 720px; width: 100%; margin: 0 auto; }
+.chat-welcome-title { font-size: 30px; font-weight: 800; color: var(--blue); line-height: 1.35; margin-bottom: 8px; }
+.chat-welcome-sub { font-size: 15px; color: var(--text-muted); margin-bottom: 28px; }
+.chat-suggest-list { display: flex; flex-direction: column; gap: 12px; }
+.chat-suggest-btn { display: flex; align-items: center; gap: 14px; padding: 18px 26px;
+  background: #fff; border: 1px solid #E3EAF6; border-radius: 999px;
+  font-family: 'Noto Sans KR', sans-serif; font-size: 16px; font-weight: 500; color: #1A2340;
+  cursor: pointer; transition: all 0.18s; text-align: left;
+  box-shadow: 0 3px 14px rgba(0,48,135,0.06); }
+.chat-suggest-btn:hover { border-color: var(--blue-mid); background: #F7FAFE;
+  transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,80,179,0.16); }
+.chat-suggest-icon { font-size: 22px; flex-shrink: 0; opacity: 0.9; }
+/* 스크롤 이동 버튼 (떠다니는) */
+.scroll-jump { position: fixed; right: 28px; width: 42px; height: 42px; border-radius: 50%;
+  background: #fff; border: 1.5px solid #C5D4ED; color: var(--blue); font-size: 17px;
+  cursor: pointer; box-shadow: 0 4px 16px rgba(0,48,135,0.18);
+  display: none; align-items: center; justify-content: center;
+  transition: all 0.18s; z-index: 90; }
+.scroll-jump:hover { background: var(--blue); color: #fff; border-color: var(--blue); transform: translateY(-2px); }
+.scroll-jump.show { display: flex; }
+.scroll-jump.top { bottom: 148px; }
+.scroll-jump.bottom { bottom: 96px; }
+
+/* 사용자 말풍선 — 오른쪽 푸른 계열 */
+.msg-user { display: flex; justify-content: flex-end; margin: 20px 0 6px; padding-right: 4px; }
+.msg-user-bubble { max-width: 78%; background: linear-gradient(150deg, #DCE7FB, #C9DCF7); color: #0F2C5C;
+  padding: 12px 18px; border-radius: 18px; font-size: 14.5px; line-height: 1.6; font-weight: 500;
+  white-space: pre-wrap; word-break: break-word; border: 1px solid #B6CDF1;
+  box-shadow: 0 2px 8px rgba(0,48,135,0.10); }
+
+/* AI 답변 — 가운데 폭, 말풍선 없음 */
+.msg-ai { margin: 6px 0 24px; animation: fadeUp 0.3s ease; }
+.msg-ai-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; padding-left: 4px; }
+.msg-ai-icon { width: 26px; height: 26px; background: var(--blue-mid); border-radius: 7px;
+  display: flex; align-items: center; justify-content: center; color: #fff; font-size: 13px; flex-shrink: 0; }
+.msg-ai-name { font-size: 12px; font-weight: 700; color: var(--blue); }
+.msg-ai-body { font-size: 15px; line-height: 1.95; white-space: pre-wrap; color: var(--text); padding-left: 4px; }
+.msg-ai-body.nf { color: #9EADC8; font-style: italic; }
+.msg-ai-extras { padding-left: 4px; }
+/* 답변 부가정보 카드들이 모두 같은 좌측선에 맞도록 좌우 패딩 0 */
+.msg-ai-extras > * + * { margin-top: 14px; }
+.msg-ai-extras .sources { padding: 0; }
+.msg-ai-extras .followup-section { padding: 0; border: none; }
+.msg-ai-extras .export-bar { padding: 0; border: none; background: none; }
+
+/* 타이핑 커서 */
+.typing-cursor { display: inline-block; width: 7px; height: 16px; background: var(--blue-mid);
+  margin-left: 2px; vertical-align: text-bottom; animation: blink 0.9s steps(2) infinite; border-radius: 1px; }
+@keyframes blink { 50% { opacity: 0; } }
+
+.chat-loading { display: flex; align-items: center; gap: 10px; padding-left: 4px; color: var(--text-muted); font-size: 13px; margin: 6px 0 24px; }
+.chat-loading .spinner { width: 18px; height: 18px; margin: 0; }
+.chat-loading .dots::after { content: ''; animation: dots 1.4s steps(4, end) infinite; }
+@keyframes dots { 0% { content: ''; } 25% { content: '.'; } 50% { content: '..'; } 75% { content: '...'; } }
+
+/* 입력창 — sticky 아래에 고정 */
+/* 입력창 — 화면 하단 항상 고정 (fixed) */
+.chat-input-wrap { position: fixed; left: 64px; right: 0; bottom: 0;
+  padding: 14px 48px 12px; background: var(--bg); z-index: 50;
+  transition: left 0.28s cubic-bezier(0.4,0,0.2,1); }
+body.sidebar-open .chat-input-wrap { left: 272px; }
+.chat-input-inner { max-width: 880px; margin: 0 auto; }
+body.chat-empty .chat-input-inner { max-width: 720px; }
+.chat-input-box { display: flex; align-items: center; gap: 10px; background: #fff;
+  border: 1.5px solid #E3EAF6; border-radius: 26px; padding: 9px 9px 9px 22px;
+  box-shadow: 0 6px 24px rgba(0,48,135,0.10); transition: all 0.18s; }
+.chat-input-box:focus-within { border-color: var(--blue-mid); box-shadow: 0 6px 28px rgba(0,80,179,0.20); }
+.chat-input-box textarea { flex: 1 1 auto; min-width: 0; resize: none; height: 50px; max-height: 160px;
+  padding: 13px 0 10px; border: none; outline: none; background: transparent;
+  font-family: 'Noto Sans KR', sans-serif; font-size: 16px; line-height: 1.5; color: var(--text); }
+.chat-input-box textarea::placeholder { color: #B0BDD4; }
+.chat-send { width: 50px; height: 50px; min-width: 50px; max-width: 50px; min-height: 50px; max-height: 50px;
+  flex: 0 0 50px; aspect-ratio: 1 / 1; border: none; border-radius: 14px;
+  background: linear-gradient(150deg, #003087, #0060CC); color: #fff;
+  font-size: 30px; font-weight: 700; line-height: 1; padding: 0;
+  cursor: pointer; transition: all 0.18s;
+  display: flex; align-items: center; justify-content: center; align-self: center; }
+.chat-send:hover { transform: scale(1.06); box-shadow: 0 4px 14px rgba(0,48,135,0.4); }
+.chat-send:disabled { opacity: 0.4; cursor: not-allowed; transform: none; box-shadow: none; }
+.chat-input-hint { text-align: center; font-size: 12px; color: #B0BDD4; margin-top: 8px; }
+
+/* 채팅 스트림 하단 여백 — 고정 입력창에 가리지 않도록 */
+.chat-stream { padding-bottom: 130px; }
+
+/* 새 질문 버튼 (사이드바) */
+.new-chat-btn { width: 100%; height: 40px; margin-bottom: 12px; border: none; border-radius: 11px;
+  background: linear-gradient(150deg, #003087, #0060CC); color: #fff; font-size: 13px; font-weight: 700;
+  cursor: pointer; font-family: 'Noto Sans KR', sans-serif; transition: all 0.15s; }
+.new-chat-btn:hover { transform: translateY(-1px); box-shadow: 0 5px 14px rgba(0,48,135,0.3); }
 </style>
 </head>
 <body>
 
 <header>
+  <div class="grid-overlay"></div>
   <div class="header-inner">
     <div class="header-left">
       <div class="header-badge">AI-Powered · Regulation Master</div>
       <h1>한성대학교<br><span>규정 마스터</span></h1>
       <p>규정 기반으로만 답변합니다 · 근거 조항을 명시합니다</p>
       <div class="mode-toggle">
-        <div class="mode-btn active" id="btnStaff" onclick="setMode('staff')">👔 교직원</div>
-        <div class="mode-btn" id="btnStudent" onclick="setMode('student')">🎓 학생</div>
+        <div class="mode-btn" id="btnAdmin" onclick="window.location.href='/login-page'">🔐 관리자</div>
       </div>
     </div>
     <div class="header-logo">
@@ -257,8 +381,6 @@ body.mode-staff #nav-teacher { display: block; }
   <div class="nav-inner">
     <div class="nav-item active" onclick="showPage('search', this)">규정 검색</div>
     <div class="nav-item" onclick="showPage('list', this)">규정 목록</div>
-    <div class="nav-item" id="nav-teacher" onclick="showPage('teacher', this)">📋 교직원 도구</div>
-    <div class="nav-item" id="nav-update" onclick="window.location.href='/login-page'">🔄 규정 업데이트</div>
     <div class="nav-spacer"></div>
   </div>
 </div>
@@ -269,9 +391,10 @@ body.mode-staff #nav-teacher { display: block; }
   <!-- 사이드바 -->
   <div class="sidebar" id="sidebar">
     <div class="sidebar-toggle" onclick="toggleSidebar()">
-      <span id="sidebarIcon">☰</span>
+      <div class="sidebar-toggle-icon" id="sidebarIcon">☰</div>
     </div>
     <div class="sidebar-content" id="sidebarContent">
+      <button class="new-chat-btn" onclick="newChat()">+ 새 질문</button>
       <div class="sidebar-title">
         <span>대화 내역</span>
         <span class="sidebar-clear" onclick="clearHistory()">전체 삭제</span>
@@ -281,43 +404,42 @@ body.mode-staff #nav-teacher { display: block; }
   </div>
 
   <main>
-    <!-- 검색 페이지 -->
+    <!-- 검색 페이지 (대화형 챗봇) -->
     <div class="page active" id="page-search">
-      <div class="mode-banner" id="modeBanner">
-        <span class="mode-banner-icon">👔</span>
-        <span><strong>교직원 모드</strong> · 복무, 급여, 임용, 징계 등 교직원 관련 규정을 검색합니다.</span>
-      </div>
-      <div class="search-card">
-        <div class="search-label">규정 질문</div>
-        <div class="search-row">
-          <textarea id="questionInput" placeholder="예: 교직원 연가는 몇 일인가요?"></textarea>
-          <button id="askBtn" onclick="ask()">질문</button>
+      <div class="chat-wrap">
+        <div class="chat-stream" id="chatStream">
+          <div class="chat-welcome" id="chatWelcome">
+            <div class="chat-welcome-title">반가워요!<br>무엇을 도와드릴까요?</div>
+            <div class="chat-welcome-sub">한성대학교 규정에 대해 무엇이든 물어보세요.</div>
+            <div class="chat-suggest-list">
+              <button class="chat-suggest-btn" onclick="suggestAsk(this)" data-q="수강신청 방법을 알려주세요">
+                <span class="chat-suggest-icon">📝</span><span>수강신청 방법을 알려주세요</span>
+              </button>
+              <button class="chat-suggest-btn" onclick="suggestAsk(this)" data-q="학생 징계 종류는 무엇인가요?">
+                <span class="chat-suggest-icon">📋</span><span>학생 징계 종류는 무엇인가요?</span>
+              </button>
+              <button class="chat-suggest-btn" onclick="suggestAsk(this)" data-q="장학금 신청 절차를 알려주세요">
+                <span class="chat-suggest-icon">🎓</span><span>장학금 신청 절차를 알려주세요</span>
+              </button>
+              <button class="chat-suggest-btn" onclick="suggestAsk(this)" data-q="휴학은 최대 몇 년까지 가능한가요?">
+                <span class="chat-suggest-icon">📅</span><span>휴학은 최대 몇 년까지 가능한가요?</span>
+              </button>
+              <button class="chat-suggest-btn" onclick="suggestAsk(this)" data-q="졸업 이수 학점 기준은요?">
+                <span class="chat-suggest-icon">📖</span><span>졸업 이수 학점 기준은요?</span>
+              </button>
+            </div>
+          </div>
         </div>
-        <div class="chips" id="chipArea"></div>
+        <div class="chat-input-wrap">
+          <div class="chat-input-inner">
+            <div class="chat-input-box">
+              <textarea id="questionInput" placeholder="규정에 대해 무엇이든 물어보세요…" rows="1"></textarea>
+              <button class="chat-send" id="askBtn" onclick="ask()" title="질문 보내기">↑</button>
+            </div>
+            <div class="chat-input-hint">Enter로 전송 · Shift+Enter로 줄바꿈</div>
+          </div>
+        </div>
       </div>
-      <div id="loading"><div class="spinner"></div>규정을 검색하고 있습니다…</div>
-      <div id="result">
-        <div class="empty"><div class="empty-icon">📜</div><p>질문을 입력하면<br>관련 규정을 찾아 근거와 함께 답변합니다.</p></div>
-      </div>
-    </div>
-
-    <!-- 교직원 도구 페이지 -->
-    <div class="page" id="page-teacher">
-      <div class="mode-banner">
-        <span class="mode-banner-icon">📋</span>
-        <span><strong>교직원 도구</strong> · 문서를 업로드하면 기존 규정과 충돌을 자동 분석합니다.</span>
-      </div>
-      <div class="upload-zone" id="uploadZone"
-           onclick="document.getElementById('conflictFileInput').click()"
-           ondragover="event.preventDefault();this.classList.add('drag')"
-           ondragleave="this.classList.remove('drag')"
-           ondrop="handleDrop(event)">
-        <input type="file" id="conflictFileInput" accept=".pdf,.docx,.txt,.hwp,.hwpx" style="display:none" onchange="handleFileSelect(this)">
-        <div class="upload-zone-icon">📄</div>
-        <p><strong>클릭하거나 파일을 드래그하세요</strong><br>PDF · DOCX · TXT · HWP · HWPX 지원</p>
-      </div>
-      <div class="conflict-loading" id="conflictLoading"><div class="spinner"></div>규정과 비교 분석 중...</div>
-      <div id="conflictResult"></div>
     </div>
 
     <!-- 규정 목록 페이지 -->
@@ -361,14 +483,15 @@ function showPage(name, el) {
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('page-' + name).classList.add('active');
   el.classList.add('active');
+  // 챗봇 페이지면 main 폭 늘리기 (좌우 빈 공간 줄임)
+  document.querySelector('main').classList.toggle('chat-mode', name === 'search');
   if (name === 'list' && !rulesData) loadRules();
 }
 
 
 /* ── 사이드바 & 히스토리 ── */
-const chatHistory = [];
-let messages = [{ role: 'system', content: '한성대학교 규정 기반 AI 챗봇' }];
-let currentChatId = null;
+const chatHistory = [];          // 대화 목록 (대화 1개 = {id, title, turns, time})
+let currentChat = null;          // 현재 진행 중인 대화 객체
 
 // localStorage에서 복원
 (function loadStoredHistory() {
@@ -377,8 +500,8 @@ let currentChatId = null;
     if (!saved) return;
     const data = JSON.parse(saved);
     if (Array.isArray(data)) chatHistory.push(...data.slice(0, 30));
-    renderHistory();
   } catch(e) {}
+  renderHistory();
 })();
 
 function saveHistory() {
@@ -390,33 +513,36 @@ function saveHistory() {
 function toggleSidebar() {
   const sb = document.getElementById('sidebar');
   sb.classList.toggle('open');
+  document.body.classList.toggle('sidebar-open', sb.classList.contains('open'));
   document.getElementById('sidebarIcon').textContent = sb.classList.contains('open') ? '✕' : '☰';
 }
 
-function addToHistory(question, msgs, responseData) {
-  const now = new Date();
-  const time = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
-  const item = { id: Date.now(), q: question, messages: msgs, time, responseData };
-  chatHistory.unshift(item);
-  currentChatId = item.id;
-  saveHistory();
+// 첫 질문을 한 줄로 요약 (간략하게)
+function summarizeTitle(q) {
+  let t = q.trim().replace(/\s+/g, ' ');
+  return t.length > 24 ? t.slice(0, 24) + '…' : t;
+}
+
+// 새 대화 시작
+function newChat() {
+  currentChat = null;
+  renderChatStream();   // 빈 화면
   renderHistory();
-  if (chatHistory.length === 1) {
-    document.getElementById('sidebar').classList.add('open');
-    document.getElementById('sidebarIcon').textContent = '✕';
-  }
+  document.getElementById('questionInput').value = '';
+  document.getElementById('questionInput').focus();
 }
 
 function renderHistory() {
   const list = document.getElementById('historyList');
   if (!chatHistory.length) {
-    list.innerHTML = '<div style="font-size:12px;color:#B0BDD4;text-align:center;padding:20px 0">아직 질문이 없습니다</div>';
+    list.innerHTML = '<div style="font-size:12px;color:#B0BDD4;text-align:center;padding:20px 0">아직 대화가 없습니다</div>';
     return;
   }
   list.innerHTML = chatHistory.map(item => `
-    <div class="history-item ${currentChatId === item.id ? 'active' : ''}" id="hist-${item.id}">
+    <div class="history-item ${currentChat && currentChat.id === item.id ? 'active' : ''}" id="hist-${item.id}">
+      <div class="history-icon">💬</div>
       <div class="history-item-body" onclick="restoreHistory(${item.id})">
-        <div class="history-q">${item.q.length>28 ? item.q.slice(0,28)+'…' : item.q}</div>
+        <div class="history-q">${item.title}</div>
         <div class="history-time">${item.time}</div>
       </div>
       <button class="history-del-btn" onclick="deleteHistoryItem(${item.id}, event)" title="삭제">✕</button>
@@ -428,49 +554,19 @@ function deleteHistoryItem(id, e) {
   const idx = chatHistory.findIndex(v => v.id === id);
   if (idx === -1) return;
   chatHistory.splice(idx, 1);
-  if (currentChatId === id) {
-    currentChatId = chatHistory.length ? chatHistory[0].id : null;
-    if (!chatHistory.length) {
-      messages = [{ role: 'system', content: '한성대학교 규정 기반 AI 챗봇' }];
-      document.getElementById('result').innerHTML = '<div class="empty"><div class="empty-icon">📜</div><p>질문을 입력하면<br>관련 규정을 찾아 근거와 함께 답변합니다.</p></div>';
-    }
+  if (currentChat && currentChat.id === id) {
+    currentChat = null;
+    renderChatStream();
   }
   saveHistory();
   renderHistory();
 }
 
-async function restoreHistory(id) {
+function restoreHistory(id) {
   const item = chatHistory.find(v => v.id === id);
   if (!item) return;
-  currentChatId = id;
-  messages = structuredClone(item.messages);
-  const lastUser = [...messages].reverse().find(v => v.role === 'user');
-  if (lastUser) document.getElementById('questionInput').value = lastUser.content;
-
-  if (item.responseData) {
-    // 완전한 데이터 있으면 즉시 표시
-    renderAnswer(lastUser?.content || '', item.responseData, true);
-  } else {
-    // 구버전 히스토리: 텍스트 먼저 표시 후 백그라운드 재조회
-    const lastAss = [...messages].reverse().find(v => v.role === 'assistant');
-    if (lastAss) renderAnswer(lastUser?.content || '',
-      { answer: lastAss.content, found: true, followups: [], sources: [] }, true);
-
-    // 백그라운드에서 소스·관련질문 가져오기 (로딩 표시 없음)
-    try {
-      const res = await fetch(`${API}/query`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: lastUser.content, messages: messages })
-      });
-      if (res.ok) {
-        const data = await res.json();
-        item.responseData = data;
-        saveHistory();
-        renderAnswer(lastUser?.content || '', data, true); // 애니메이션 없이 덮어씌우기
-      }
-    } catch(e) {}
-  }
-
+  currentChat = item;
+  renderChatStream();
   renderHistory();
   showPage('search', document.querySelectorAll('.nav-item')[0]);
 }
@@ -478,63 +574,61 @@ async function restoreHistory(id) {
 function clearHistory() {
   if (!chatHistory.length) return;
   if (!confirm('대화 내역을 모두 삭제하시겠습니까?')) return;
-  chatHistory.length = 0; currentChatId = null;
-  messages = [{ role: 'system', content: '한성대학교 규정 기반 AI 챗봇' }];
+  chatHistory.length = 0;
+  currentChat = null;
   saveHistory();
   renderHistory();
-  document.getElementById('result').innerHTML = '<div class="empty"><div class="empty-icon">📜</div><p>질문을 입력하면<br>관련 규정을 찾아 근거와 함께 답변합니다.</p></div>';
+  renderChatStream();
 }
 
 renderHistory();
-
-/* ── 타이핑 애니메이션 ── */
+renderChatStream();   // 초기 화면 그리기 (body.chat-empty 클래스도 자동 부여)
+/* ── 타이핑 애니메이션 (실시간 소제목 볼드체 반영) ── */
 function typeText(el, text, speed = 12) {
   return new Promise(resolve => {
-    el.innerHTML = '<span class="typing-cursor"></span>';
-    const cursor = el.querySelector('.typing-cursor');
     let i = 0;
+    let currentText = '';
+    
     function next() {
-      if (i >= text.length) { cursor.remove(); resolve(); return; }
-      const ch = text[i++];
-      if (ch === '\n') cursor.insertAdjacentHTML('beforebegin', '<br>');
-      else cursor.insertAdjacentText('beforebegin', ch);
+      if (i >= text.length) {
+        resolve();
+        return;
+      }
+      
+      currentText += text[i++];
+      
+      // 글자가 추가될 때마다 실시간으로 줄 단위 분석 후 HTML 반환
+      const lines = currentText.split('\n');
+      const formattedHTML = lines.map((line, idx) => {
+        const trimmed = line.trim();
+        if (!trimmed) return '';
+        
+        // 현재 타이핑 중인 마지막 줄인지 확인
+        const isLastLine = idx === lines.length - 1;
+        
+        // 이전 줄과 다음 줄이 비어있는지 체크 (원문 기준 구조 분석)
+        const originalLines = text.split('\n');
+        const prevEmpty = idx === 0 || !originalLines[idx - 1].trim();
+        const nextEmpty = idx === originalLines.length - 1 || !originalLines[idx + 1].trim();
+        
+        // 소제목 조건 판별
+        const isHeading = trimmed.length <= 22
+          && !/^[-•*]/.test(trimmed)
+          && !/^\d+[.)]\s/.test(trimmed)
+          && prevEmpty 
+          && (isLastLine ? true : nextEmpty); // 타이핑 중인 마지막 줄일 때는 다음 줄 공백 체크 유연하게 적용
+
+        return isHeading ? `<b style="font-size:20px; color:#2F5A9E;">${trimmed}</b>` : trimmed;
+      }).join('<br>'); // \n을 즉시 <br>로 치환하여 반영
+
+      el.innerHTML = formattedHTML + '<span class="typing-cursor"></span>';
+      
       setTimeout(next, speed);
     }
     next();
   });
 }
 
-/* ── 모드 ── */
-const MODES = {
-  staff: {
-    banner: "👔", bannerLabel: "교직원 모드",
-    desc: "복무, 급여, 임용, 징계 등 교직원 관련 규정을 검색합니다.",
-    placeholder: "예: 교직원 연가는 몇 일인가요?",
-    chips: ["연가 일수는?", "초과근무수당 지급 기준은?", "교원 임용 절차는?", "휴직 사유와 기간은?", "징계 종류는?", "퇴직금 지급 기준은?"]
-  },
-  student: {
-    banner: "🎓", bannerLabel: "학생 모드",
-    desc: "학사, 장학, 졸업, 수강 등 학생 관련 규정을 검색합니다.",
-    placeholder: "예: 졸업 이수 학점은 몇 학점인가요?",
-    chips: ["졸업 이수 학점은?", "장학금 신청 기준은?", "휴학 가능 기간은?", "성적 이의신청 방법은?", "전공 변경 절차는?", "복학 신청 방법은?"]
-  }
-};
-let currentMode = 'staff';
-
-function setMode(mode) {
-  currentMode = mode;
-  const m = MODES[mode];
-  document.getElementById('btnStaff').classList.toggle('active', mode === 'staff');
-  document.getElementById('btnStudent').classList.toggle('active', mode === 'student');
-  document.getElementById('modeBanner').innerHTML = `<span class="mode-banner-icon">${m.banner}</span><span><strong>${m.bannerLabel}</strong> · ${m.desc}</span>`;
-  document.getElementById('questionInput').placeholder = m.placeholder;
-  document.getElementById('chipArea').innerHTML = m.chips.map(c => `<span class="chip" onclick="setQ(this)">${c}</span>`).join('');
-  document.body.className = mode === 'staff' ? 'mode-staff' : '';
-  if (mode === 'student') {
-    const t = document.getElementById('nav-teacher');
-    if (t && t.classList.contains('active')) document.querySelector('.nav-item').click();
-  }
-}
 
 /* ── 규정 통합 검색 ── */
 let searchTimer = null;
@@ -691,170 +785,478 @@ function filterRules() {
 }
 
 /* ── 질문 & 답변 ── */
-function setQ(el) { document.getElementById('questionInput').value = el.textContent; document.getElementById('questionInput').focus(); }
-document.getElementById('questionInput').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ask(); } });
+/* ── 대화형 챗봇 ── */
+(function initChatInput() {
+  const ta = document.getElementById('questionInput');
+  ta.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ask(); }
+  });
+  // textarea 자동 높이 조절
+  ta.addEventListener('input', () => {
+    ta.style.height = '42px';
+    ta.style.height = Math.min(ta.scrollHeight, 140) + 'px';
+  });
+  // 초기 진입이 챗봇이면 main 와이드 모드
+  document.querySelector('main').classList.add('chat-mode');
+})();
 
-async function ask() {
-  const q = document.getElementById('questionInput').value.trim();
-  if (!q) return;
-  const btn = document.getElementById('askBtn');
-  const loading = document.getElementById('loading');
-  const result = document.getElementById('result');
-  btn.disabled = true; loading.style.display = 'block'; result.innerHTML = '';
-  result.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  try {
-    messages.push({ role: 'user', content: q });
-    const res = await fetch(`${API}/query`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question: q, messages: messages })
-    });
-    if (!res.ok) { const err = await res.json(); throw new Error(err.detail || '서버 오류'); }
-    const data = await res.json();
-    messages.push({ role: 'assistant', content: data.answer });
-    addToHistory(q, structuredClone(messages), data);
-    renderAnswer(q, data);
-  } catch(e) {
-    result.innerHTML = `<div class="err">오류: ${e.message}<br><small>서버가 실행 중인지 확인하세요 (uvicorn server:app --reload)</small></div>`;
-  } finally { btn.disabled = false; loading.style.display = 'none'; }
+// 답변 본문 포맷 (소제목 볼드)
+function formatAnswerHTML(text) {
+  const lines = (text || '').split('\n');
+  return lines.map((line, i) => {
+    const trimmed = line.trim();
+    if (!trimmed) return '';
+    const prevEmpty = i === 0 || !lines[i-1].trim();
+    const nextEmpty = i === lines.length-1 || !lines[i+1].trim();
+    const isHeading = trimmed.length <= 22
+      && !/^[-•*]/.test(trimmed)
+      && !/^\d+[.)]\s/.test(trimmed)
+      && prevEmpty && nextEmpty;
+    return isHeading ? `<b style="font-size:18px; color:#2F5A9E;">${trimmed}</b>` : trimmed;
+  }).join('\n');
 }
 
-async function setFollowup(q) {
-  document.getElementById('questionInput').value = q;
-  document.getElementById('questionInput').scrollIntoView({ behavior: 'smooth', block: 'center' });
-  await ask();
+function escHtml(s) {
+  return String(s || '').replace(/[&<>"']/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
-function renderAnswer(question, data, instant = false) {
-  const result = document.getElementById('result');
-  const truncQ = question.length > 40 ? question.slice(0,40) + '…' : question;
-
+// 답변에 딸린 부가정보(참조조항/담당부서/연관질문/내보내기) HTML 생성
+function buildExtras(question, data) {
   let src = '';
   if (data.sources && data.sources.length > 0) {
-    src = `<div class="sources"><div class="src-label">참조 조항</div>${data.sources.map(s => `
-      <div class="src-item"><div class="src-dot"></div>
-        <div><div class="src-title">${s.title||'규정'}</div>
-        <div class="src-meta">${s.article||''}${s.department?' · '+s.department:''}</div>
-        ${s.url?`<a class="src-link" href="${s.url}" target="_blank">원문 보기 →</a>`:''}</div>
-        <span class="src-score">유사도 ${Math.round(s.score*100)}%</span>
-      </div>`).join('')}</div>`;
+    // ① 답변 텍스트에서 실제 인용된 조 번호 추출 (예: '제56조', '제 56 조')
+    const ans = (data.answer || '').replace(/\s+/g, '');
+    const citedNums = new Set((ans.match(/제\d+조/g) || []));
+
+    // ② 인용된 조항만 통과 — 인용이 없으면 참조 조항 섹션 자체를 생략
+    //    (관련 없는 조항이 뜨는 걸 방지)
+    let relevant = [];
+    if (citedNums.size > 0) {
+      relevant = data.sources.filter(s => {
+        if (!s.article) return false;
+        const a = s.article.replace(/\s+/g, '');
+        return [...citedNums].some(n => a.includes(n));
+      });
+    }
+
+    // ③ '(제정 2016...)' 같은 메타데이터성 출처 필터
+    const cleanSources = relevant.filter(s =>
+      !/^\(?(제정|개정|시행|폐지)\s*\d{4}/.test(s.title || ''));
+
+    // ④ 같은 규정 + 같은 조항은 1개만
+    //    (url에 쿼리스트링 등 미세한 차이가 있어도 합쳐지도록 title+article만 사용)
+    //    article도 공백·괄호·구두점 다 빼고 비교 (예: '제3조 (목적)' = '제3조(목적)')
+    const normalize = s => (s || '').replace(/[\s()（）\[\]·,.~\-_]/g, '');
+    const seen = new Set();
+    const unique = [];
+    cleanSources.forEach(s => {
+      const key = normalize(s.title) + '|' + normalize(s.article);
+      if (seen.has(key)) return;
+      seen.add(key);
+      unique.push(s);
+    });
+
+    // ⑤ 같은 규정이면 조항만 합쳐 1줄로 (예: 제5조 · 제7조)
+    const grouped = {}; const order = [];
+    unique.forEach(s => {
+      const key = normalize(s.title) + '|' + (s.url || '');
+      if (!grouped[key]) { grouped[key] = { ...s, articles: [] }; order.push(key); }
+      if (s.article && !grouped[key].articles.includes(s.article)) {
+        grouped[key].articles.push(s.article);
+      }
+    });
+
+    if (order.length > 0) {
+      src = `<div class="sources"><div class="src-label">참조 조항</div>${order.map(key => {
+        const s = grouped[key];
+        let title = s.title || '규정';
+        if (/^제\d+조/.test(title) || title.length > 25) title = title.slice(0, 25) + '…';
+        const articleStr = s.articles.length ? s.articles.join(' · ') : (s.article || '');
+        return `<div class="src-item"><div class="src-dot"></div>
+          <div><div class="src-title">${escHtml(title)}</div>
+          <div class="src-meta">${escHtml(articleStr)}${s.department ? ' · ' + escHtml(s.department) : ''}</div>
+          ${s.url ? `<a class="src-link" href="${s.url}" target="_blank">원문 보기 →</a>` : ''}</div>
+        </div>`;
+      }).join('')}</div>`;
+    }
   }
 
   let deptHtml = '';
   if (data.dept) {
     const phone = data.dept_phone || '02-760-4114';
-    deptHtml = `<div style="padding:14px 22px 0">
+    deptHtml = `<div class="dept-card-wrap">
       <div class="dept-card"><div class="dept-icon">📞</div>
-        <div class="dept-info"><div class="dept-name">${data.dept}</div><div class="dept-phone">${phone}</div></div>
-        <button class="dept-call-btn" onclick="alert('담당부서: ${data.dept}\\n전화번호: ${phone}')">연결 안내</button>
+        <div class="dept-info"><div class="dept-name">${escHtml(data.dept)}</div><div class="dept-phone">${escHtml(phone)}</div></div>
       </div></div>`;
   }
 
+  // 연관 질문 - 항상 4개 보장 (AI가 적게 주면 일반 fallback으로 채움)
   let followupHtml = '';
-  if (data.followups && data.followups.length > 0) {
-    const items = data.followups.slice(0,4).map(q => {
-      // Q: 접두사 혹시 남아있으면 제거
-      const clean = q.replace(/^Q:\s*/i, '').replace(/\s*A:[\s\S]*/i, '').trim();
-      if (!clean) return '';
-      return `<div class="followup-item" onclick="setFollowup(this.dataset.q)" data-q="${clean.replace(/"/g,'&quot;')}">
-        <span>${clean}</span><span class="followup-arrow">›</span></div>`;
-    }).filter(Boolean).join('');
-    followupHtml = `<div class="followup-section"><div class="followup-label">💡 이런 것도 궁금하신가요?</div>
-      <div class="followup-grid">${items}</div></div>`;
+  let followups = (data.followups || [])
+    .map(q => q.replace(/^Q:\s*/i, '').replace(/\s*A:[\s\S]*/i, '').trim())
+    .filter(Boolean);
+  // 부족하면 일반 fallback 추가 (중복 회피)
+  const fallback = [
+    '관련 규정 원문은 어디서 볼 수 있나요?',
+    '담당 부서에 직접 문의하려면 어떻게 하나요?',
+    '비슷한 사례에는 어떤 게 있나요?',
+    '예외 조항은 없나요?',
+  ];
+  for (const f of fallback) {
+    if (followups.length >= 4) break;
+    if (!followups.includes(f)) followups.push(f);
   }
+  followups = followups.slice(0, 4);
+  const items = followups.map(clean =>
+    `<div class="followup-item" onclick="askFollowup(this.dataset.q)" data-q="${escHtml(clean)}">
+      <span>${escHtml(clean)}</span><span class="followup-arrow">›</span></div>`
+  ).join('');
+  followupHtml = `<div class="followup-section">
+    <div class="followup-label">💡 이어서 물어보기</div>
+    <div class="followup-grid">${items}</div></div>`;
 
+  const isDiffQ = /뭐가 바뀌|어떻게 바뀌|개정 내용|개정사항|변경사항|달라진|차이/.test(question);
+  const diffBtnTitle = data.sources?.[0]?.title || '';
+  const diffBtn = (isDiffQ && diffBtnTitle)
+    ? `<button class="export-btn" onclick="openDiffModal('${diffBtnTitle.replace(/'/g,"\\'")}')">🔍 버전 비교</button>` : '';
   const exportBar = data.found ? `<div class="export-bar">
-    <button class="export-btn" onclick="exportAnswer('pdf', this)">⬇ PDF</button>
-    <button class="export-btn" onclick="exportAnswer('docx', this)">⬇ Word</button>
-  </div>` : '';
+    <button class="export-btn" onclick="exportAnswerData(this)">⬇ PDF</button>
+    <button class="export-btn" onclick="exportAnswerData(this,'docx')">⬇ Word</button>
+    ${diffBtn}</div>` : '';
 
-  result.innerHTML = `<div class="answer-card">
-    <div class="answer-header">
-      <div class="answer-icon">⚖</div>
-      <div class="answer-htxt"><strong>${truncQ}</strong>규정 기반 AI 답변</div>
-    </div>
-    <div class="answer-body${!data.found?' nf':''}" id="typingBody"></div>
-    <div id="answerExtras" style="display:none">${src}${deptHtml}${followupHtml}${exportBar}</div>
-  </div>`;
-
-  if (instant) {
-    // 히스토리 복원: 애니메이션 없이 즉시 표시
-    const body = document.getElementById('typingBody');
-    if (body) body.innerHTML = (data.answer || '').replace(/\n/g, '<br>');
-    const extras = document.getElementById('answerExtras');
-    if (extras) extras.style.display = '';
-  } else {
-    typeText(document.getElementById('typingBody'), data.answer, 12).then(() => {
-      const extras = document.getElementById('answerExtras');
-      if (extras) { extras.style.display = ''; extras.style.animation = 'fadeUp 0.3s ease'; }
-    });
-  }
-
-  window._lastAnswer = { ...data, question };
+  return src + deptHtml + followupHtml + exportBar;
 }
 
-async function exportAnswer(fmt, btn) {
-  const data = window._lastAnswer;
-  if (!data) { alert('먼저 질문을 해주세요.'); return; }
+// 현재 대화(currentChat)를 화면에 그림
+function renderChatStream() {
+  const stream = document.getElementById('chatStream');
+  if (!currentChat || !currentChat.turns.length) {
+    // 추천 화면 — 페이지 스크롤 막음
+    document.body.classList.add('chat-empty');
+    stream.innerHTML = `<div class="chat-welcome" id="chatWelcome">
+      <div class="chat-welcome-title">반가워요!<br>무엇을 도와드릴까요?</div>
+      <div class="chat-welcome-sub">한성대학교 규정에 대해 무엇이든 물어보세요.</div>
+      <div class="chat-suggest-list">
+        <button class="chat-suggest-btn" onclick="suggestAsk(this)" data-q="수강신청 방법을 알려주세요"><span class="chat-suggest-icon">📝</span><span>수강신청 방법을 알려주세요</span></button>
+        <button class="chat-suggest-btn" onclick="suggestAsk(this)" data-q="학생 징계 종류는 무엇인가요?"><span class="chat-suggest-icon">📋</span><span>학생 징계 종류는 무엇인가요?</span></button>
+        <button class="chat-suggest-btn" onclick="suggestAsk(this)" data-q="장학금 신청 절차를 알려주세요"><span class="chat-suggest-icon">🎓</span><span>장학금 신청 절차를 알려주세요</span></button>
+        <button class="chat-suggest-btn" onclick="suggestAsk(this)" data-q="휴학은 최대 몇 년까지 가능한가요?"><span class="chat-suggest-icon">📅</span><span>휴학은 최대 몇 년까지 가능한가요?</span></button>
+        <button class="chat-suggest-btn" onclick="suggestAsk(this)" data-q="졸업 이수 학점 기준은요?"><span class="chat-suggest-icon">📖</span><span>졸업 이수 학점 기준은요?</span></button>
+      </div></div>`;
+    return;
+  }
+  // 대화 시작 — 페이지 스크롤 허용
+  document.body.classList.remove('chat-empty');
+  let html = '';
+  currentChat.turns.forEach((t, i) => {
+    html += `<div class="msg-user"><div class="msg-user-bubble">${escHtml(t.q)}</div></div>`;
+    const data = t.data || {};
+    const bodyCls = data.found === false ? ' nf' : '';
+    html += `<div class="msg-ai">
+      <div class="msg-ai-head"><div class="msg-ai-icon">⚖</div><div class="msg-ai-name">규정 AI 답변</div></div>
+      <div class="msg-ai-body${bodyCls}">${formatAnswerHTML(data.answer || '')}</div>
+      <div class="msg-ai-extras">${buildExtras(t.q, data)}</div>
+    </div>`;
+  });
+  stream.innerHTML = html;
+  scrollToBottom();
+}
+
+// 연관 질문 클릭 → 그 질문으로 바로 이어서 물어봄
+function askFollowup(q) {
+  document.getElementById('questionInput').value = q;
+  ask();
+}
+
+// 추천 질문 버튼 클릭 → 즉시 전송
+function suggestAsk(btn) {
+  const q = btn.dataset.q;
+  if (!q) return;
+  document.getElementById('questionInput').value = q;
+  ask();
+}
+
+// 부드러운 자동 스크롤 - 페이지 맨 아래로
+function scrollToBottom() {
+  requestAnimationFrame(() => {
+    window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+    // 이미지/폰트 로드 후 한 번 더 보정
+    setTimeout(() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }), 60);
+  });
+}
+
+// AI 답변 타이핑 애니메이션
+function typeAnswer(bodyEl, text, onDone) {
+  const formatted = formatAnswerHTML(text || '');
+  // 글자 단위 타이핑 - 한 번에 여러 글자 (속도)
+  bodyEl.innerHTML = '<span class="typing-cursor"></span>';
+  let i = 0;
+  const total = formatted.length;
+  const step = Math.max(2, Math.floor(total / 280));  // 너무 길면 빠르게
+  const interval = 14;  // ms
+
+  // HTML 태그 단위로 자르면 깨지므로 글자 단위로 잘라 보이는 만큼만 사용 + 끝에 cursor
+  function tick() {
+    i = Math.min(total, i + step);
+    // 미완성 태그가 잘리지 않도록 마지막 '<' 이후 미완료 태그 제거
+    let visible = formatted.slice(0, i);
+    const lastLt = visible.lastIndexOf('<');
+    const lastGt = visible.lastIndexOf('>');
+    if (lastLt > lastGt) visible = visible.slice(0, lastLt);
+    bodyEl.innerHTML = visible + '<span class="typing-cursor"></span>';
+    // 스크롤 따라가기
+    if (i % (step * 8) === 0) scrollToBottom();
+    if (i < total) {
+      setTimeout(tick, interval);
+    } else {
+      bodyEl.innerHTML = formatted;  // 마지막엔 커서 없이 완성형
+      if (onDone) onDone();
+    }
+  }
+  tick();
+}
+
+async function ask() {
+  const input = document.getElementById('questionInput');
+  const q = input.value.trim();
+  if (!q) return;
+  const btn = document.getElementById('askBtn');
+  const stream = document.getElementById('chatStream');
+
+  // 새 대화면 생성 + 로그에 등록 (첫 질문일 때만 로그 추가)
+  if (!currentChat) {
+    const now = new Date();
+    const time = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
+    currentChat = {
+      id: Date.now(),
+      title: summarizeTitle(q),
+      time: time,
+      turns: [],
+      messages: [{ role: 'system', content: '한성대학교 규정 기반 AI 챗봇' }]
+    };
+    chatHistory.unshift(currentChat);
+    document.getElementById('sidebar').classList.add('open');
+    document.body.classList.add('sidebar-open');
+    document.getElementById('sidebarIcon').textContent = '✕';
+    // 빈 안내 화면 비우기
+    // 빈 안내(추천 카드) 화면 비우기
+    // 빈 안내(추천 카드) 화면 비우기 + 페이지 스크롤 허용
+    if (stream.querySelector('.chat-welcome')) stream.innerHTML = '';
+    document.body.classList.remove('chat-empty');
+  }
+
+  input.value = '';
+  input.style.height = '42px';
+  btn.disabled = true;
+
+  // ① 사용자 질문 즉시 말풍선으로 표시
+  const userDiv = document.createElement('div');
+  userDiv.className = 'msg-user';
+  userDiv.innerHTML = `<div class="msg-user-bubble">${escHtml(q)}</div>`;
+  stream.appendChild(userDiv);
+
+  // ② 로딩 메시지 즉시 표시
+  const loadingEl = document.createElement('div');
+  loadingEl.className = 'chat-loading';
+  loadingEl.innerHTML = '<div class="spinner"></div><span>규정을 검색하는 중<span class="dots"></span></span>';
+  stream.appendChild(loadingEl);
+  scrollToBottom();
+
+  try {
+    currentChat.messages.push({ role: 'user', content: q });
+    const res = await fetch(`${API}/query`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question: q, messages: currentChat.messages })
+    });
+    if (!res.ok) { const err = await res.json(); throw new Error(err.detail || '서버 오류'); }
+    const data = await res.json();
+    currentChat.messages.push({ role: 'assistant', content: data.answer });
+    currentChat.turns.push({ q: q, data: data });
+    saveHistory();
+    renderHistory();
+
+    // ③ 로딩 제거하고 AI 답변 박스 만들기
+    loadingEl.remove();
+    const bodyCls = data.found === false ? ' nf' : '';
+    const aiDiv = document.createElement('div');
+    aiDiv.className = 'msg-ai';
+    aiDiv.innerHTML = `
+      <div class="msg-ai-head"><div class="msg-ai-icon">⚖</div><div class="msg-ai-name">규정 AI 답변</div></div>
+      <div class="msg-ai-body${bodyCls}"></div>
+      <div class="msg-ai-extras" style="display:none"></div>`;
+    stream.appendChild(aiDiv);
+    const body = aiDiv.querySelector('.msg-ai-body');
+    const extras = aiDiv.querySelector('.msg-ai-extras');
+
+    // ④ 타이핑 애니메이션
+    typeAnswer(body, data.answer || '', () => {
+      extras.innerHTML = buildExtras(q, data);
+      extras.style.display = '';
+      scrollToBottom();
+    });
+  } catch(e) {
+    loadingEl.remove();
+    const errDiv = document.createElement('div');
+    errDiv.className = 'msg-ai';
+    errDiv.innerHTML = `
+      <div class="msg-ai-head"><div class="msg-ai-icon">⚖</div><div class="msg-ai-name">규정 AI 답변</div></div>
+      <div class="msg-ai-body nf">오류: ${escHtml(e.message)}\n서버가 실행 중인지 확인하세요.</div>`;
+    stream.appendChild(errDiv);
+    currentChat.turns.push({ q: q, data: { answer: '오류: ' + e.message, found: false } });
+    scrollToBottom();
+  } finally {
+    btn.disabled = false;
+    input.focus();
+  }
+}
+
+// 마지막 답변 내보내기 (현재 대화의 마지막 turn)
+async function exportAnswerData(btn, fmt) {
+  fmt = fmt || 'pdf';
+  if (!currentChat || !currentChat.turns.length) { alert('먼저 질문을 해주세요.'); return; }
+  const last = currentChat.turns[currentChat.turns.length - 1];
+  const data = last.data;
   const origText = btn.textContent;
   btn.disabled = true; btn.textContent = '생성 중...';
   try {
     const res = await fetch(`${API}/export/${fmt}`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: '규정 답변 리포트', content: data.answer, sources: data.sources || [], question: data.question || '' })
+      body: JSON.stringify({ title: '규정 답변 리포트', content: data.answer,
+        sources: data.sources || [], question: last.q })
     });
     if (!res.ok) throw new Error(`서버 오류 (${res.status})`);
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url;
-    a.download = fmt === 'pdf' ? 'hansung_report.pdf' : 'hansung_report.docx';
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    const a = document.createElement('a');
+    a.href = url; a.download = `규정답변.${fmt === 'pdf' ? 'pdf' : 'docx'}`;
+    document.body.appendChild(a); a.click(); a.remove();
     URL.revokeObjectURL(url);
-  } catch(e) { alert('내보내기 실패: ' + e.message); }
-  finally { btn.disabled = false; btn.textContent = origText; }
+  } catch(e) {
+    alert('내보내기 실패: ' + e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = origText;
+  }
 }
 
-/* ── 충돌 분석 ── */
-function handleDrop(e) {
-  e.preventDefault(); document.getElementById('uploadZone').classList.remove('drag');
-  const file = e.dataTransfer.files[0]; if (file) uploadConflict(file);
-}
-function handleFileSelect(input) { if (input.files[0]) uploadConflict(input.files[0]); }
-async function uploadConflict(file) {
-  const loading = document.getElementById('conflictLoading');
-  const result  = document.getElementById('conflictResult');
-  loading.style.display = 'block'; result.innerHTML = '';
-  const form = new FormData(); form.append('file', file);
-  try {
-    const res = await fetch(`${API}/conflict/`, { method: 'POST', body: form });
-    if (!res.ok) { const e = await res.json(); throw new Error(e.detail||'분석 실패'); }
-    renderConflict(await res.json());
-  } catch(e) { result.innerHTML = `<div class="err">오류: ${e.message}</div>`; }
-  finally { loading.style.display = 'none'; }
-}
-function renderConflict(data) {
-  const sevCls = {'높음':'sev-high','보통':'sev-mid','낮음':'sev-low'};
-  const items = (data.conflicts||[]).map(c => `
-    <div class="conflict-item">
-      <span class="severity ${sevCls[c.severity]||'sev-mid'}">${c.severity}</span>
-      <div class="conflict-detail">
-        <div class="reg">${c.regulation}</div><div class="art">${c.article}</div>
-        <div class="iss">${c.issue}</div>
-      </div>
-    </div>`).join('') || '<p style="color:#6B7A99;font-size:14px">충돌 항목 없음</p>';
-  document.getElementById('conflictResult').innerHTML = `
-    <div class="conflict-card">
-      <div class="conflict-header"><div class="conflict-icon">⚡</div>
-        <div><strong style="font-size:14px;color:#1A2340">${data.filename}</strong>
-          <div style="font-size:12px;color:#6B7A99;margin-top:2px">충돌 ${data.conflicts?.length||0}건 발견</div></div>
-      </div>
-      <div class="conflict-summary">${data.summary}</div>
-      <div class="conflict-list"><div class="src-label" style="margin-bottom:10px">충돌 항목</div>${items}</div>
-      <div class="conflict-rec"><strong>💡 권고사항</strong>${data.recommendations}</div>
-    </div>`;
-}
+
 
 /* ── 초기화 ── */
-setMode('staff');
+/* ── Diff Modal ── */
+let _diffData = null;
+
+async function openDiffModal(title) {
+  document.getElementById('diffOverlay').classList.add('open');
+  document.getElementById('diffTitle').textContent = title + ' 버전 비교';
+  document.getElementById('diffOldBody').innerHTML = '<div class="diff-spin"><div class="spinner"></div>불러오는 중...</div>';
+  document.getElementById('diffNewBody').innerHTML = '';
+  document.getElementById('diffVerSelect').innerHTML = '';
+
+  try {
+    const res = await fetch(`${API}/diff`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({question: title})
+    });
+    if (!res.ok) throw new Error('diff 로드 실패');
+    _diffData = await res.json();
+
+    const sel = document.getElementById('diffVerSelect');
+    if (!_diffData.pairs || !_diffData.pairs.length) {
+      document.getElementById('diffOldBody').innerHTML = '<div class="diff-empty">개정 이력이 없거나 변경된 조항이 없습니다.</div>';
+      return;
+    }
+    _diffData.pairs.forEach((p, i) => {
+      const opt = document.createElement('option');
+      opt.value = i;
+      opt.textContent = `${p.from_date} → ${p.to_date}`;
+      sel.appendChild(opt);
+    });
+    renderDiffPair();
+  } catch(e) {
+    document.getElementById('diffOldBody').innerHTML = `<div class="diff-empty">오류: ${e.message}</div>`;
+  }
+}
+
+function closeDiff() {
+  document.getElementById('diffOverlay').classList.remove('open');
+}
+
+function renderDiffPair() {
+  if (!_diffData) return;
+  const idx  = parseInt(document.getElementById('diffVerSelect').value) || 0;
+  const pair = _diffData.pairs[idx];
+  if (!pair) return;
+
+  document.getElementById('diffOldHead').textContent = `← 이전 버전 (${pair.from_date})`;
+  document.getElementById('diffNewHead').textContent = `최신 버전 (${pair.to_date}) →`;
+
+  let leftHtml = '', rightHtml = '';
+  for (const art of pair.articles) {
+    const sep = `<div class="diff-art-sep">${art.name}</div>`;
+    const {lh, rh} = charDiff(art.old || '', art.new || '');
+    leftHtml  += sep + lh + '\n\n';
+    rightHtml += sep + rh + '\n\n';
+  }
+
+  document.getElementById('diffOldBody').innerHTML = leftHtml || '<div class="diff-empty">변경 없음</div>';
+  document.getElementById('diffNewBody').innerHTML = rightHtml || '<div class="diff-empty">변경 없음</div>';
+}
+
+function charDiff(oldStr, newStr) {
+  const MAX = 1800;
+  if (oldStr.length > MAX) oldStr = oldStr.slice(0, MAX) + '…';
+  if (newStr.length > MAX) newStr = newStr.slice(0, MAX) + '…';
+
+  const ol = oldStr.length, nl = newStr.length;
+  const dp = Array.from({length: ol+1}, () => new Uint16Array(nl+1));
+  for (let i = 1; i <= ol; i++)
+    for (let j = 1; j <= nl; j++)
+      dp[i][j] = oldStr[i-1] === newStr[j-1] ? dp[i-1][j-1]+1 : Math.max(dp[i-1][j], dp[i][j-1]);
+
+  const ops = [];
+  let i = ol, j = nl;
+  while (i > 0 || j > 0) {
+    if (i > 0 && j > 0 && oldStr[i-1] === newStr[j-1]) {
+      ops.unshift({t:'s', c:oldStr[i-1]}); i--; j--;
+    } else if (j > 0 && (i === 0 || dp[i][j-1] >= dp[i-1][j])) {
+      ops.unshift({t:'a', c:newStr[j-1]}); j--;
+    } else {
+      ops.unshift({t:'d', c:oldStr[i-1]}); i--;
+    }
+  }
+
+  const esc = c => c === '\n' ? '<br>' : c.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  let lh = '', rh = '';
+  for (const op of ops) {
+    if (op.t === 's') { lh += esc(op.c); rh += esc(op.c); }
+    else if (op.t === 'd') lh += `<mark class="diff-del">${esc(op.c)}</mark>`;
+    else rh += `<mark class="diff-add">${esc(op.c)}</mark>`;
+  }
+  return {lh, rh};
+}
+</script>
+
+<!-- 스크롤 점프 버튼 -->
+<button class="scroll-jump top" id="scrollTopBtn" onclick="window.scrollTo({top:0,behavior:'smooth'})" title="맨 위로">↑</button>
+<button class="scroll-jump bottom" id="scrollBottomBtn" onclick="window.scrollTo({top:document.body.scrollHeight,behavior:'smooth'})" title="맨 아래로">↓</button>
+
+<script>
+// 스크롤 위치 따라 점프 버튼 표시
+(function setupScrollJump() {
+  const topBtn = document.getElementById('scrollTopBtn');
+  const botBtn = document.getElementById('scrollBottomBtn');
+  function update() {
+    const y = window.scrollY;
+    const max = document.body.scrollHeight - window.innerHeight;
+    // 스크롤 가능 영역이 거의 없으면 둘 다 숨김
+    if (max < 200) { topBtn.classList.remove('show'); botBtn.classList.remove('show'); return; }
+    topBtn.classList.toggle('show', y > 200);          // 어느 정도 내렸을 때만 ↑ 표시
+    botBtn.classList.toggle('show', y < max - 200);    // 끝에 거의 다 왔을 땐 ↓ 숨김
+  }
+  window.addEventListener('scroll', update, { passive: true });
+  window.addEventListener('resize', update);
+  update();
+})();
 </script>
 </body>
 </html>

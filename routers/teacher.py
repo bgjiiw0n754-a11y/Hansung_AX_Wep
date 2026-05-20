@@ -176,74 +176,332 @@ class ConflictReport(BaseModel):
     recommendations: str
     filename: str
 
+
+# 한국어 일반 불용어 — 검색 키워드에서 제외
+_STOPWORDS = {
+    "규정", "조항", "조의", "제정", "개정", "시행", "본문", "내용", "사항",
+    "경우", "다음", "다른", "이때", "기타", "관련", "필요", "가능", "있다",
+    "한다", "한성대", "한성대학교", "대학교", "대학", "학교", "학생", "직원",
+    "교직원", "위원", "위원회", "기관", "부서", "팀", "센터", "본부",
+    "이상", "이하", "이내", "미만", "초과", "약간", "각종", "일부", "전부",
+    "또는", "그리고", "다만", "단", "이와", "이를", "이러한", "그러한",
+    "이라", "이라고", "라고", "에서", "에는", "에게", "으로", "로서",
+    "하는", "하여", "하지", "한다고", "되며", "되어", "이라", "이라는",
+    "총칙", "부칙", "별표", "별지", "양식",
+}
+
+
+def _is_garbage_pdf_text(text: str) -> bool:
+    """PDF 추출이 깨져서 의미없는 텍스트인지 판정"""
+    if len(text) < 30:
+        return True
+    # 한글이 거의 없으면 깨진 거 (영문/숫자/심볼만)
+    hangul = len(re.findall(r'[가-힣]', text))
+    if hangul / max(len(text), 1) < 0.15:
+        return True
+    # 같은 짧은 토큰이 5번 이상 반복되면 깨진 거 (nn nn nn... 패턴)
+    tokens = text.split()
+    if len(tokens) >= 5:
+        from collections import Counter
+        cnt = Counter(t for t in tokens if 1 <= len(t) <= 3)
+        if cnt and cnt.most_common(1)[0][1] >= len(tokens) * 0.3:
+            return True
+    return False
+
+
+def _extract_keywords(text: str, limit: int = 15) -> list[str]:
+    """업로드 문서에서 의미있는 검색 키워드 추출.
+    한글 2-6글자 명사 위주, 빈도순, 불용어 제외."""
+    # 한글 토큰만 (영문/숫자 제외)
+    tokens = re.findall(r'[가-힣]{2,8}', text)
+    from collections import Counter
+    cnt = Counter()
+    for tok in tokens:
+        if tok in _STOPWORDS:
+            continue
+        if len(tok) < 2:
+            continue
+        cnt[tok] += 1
+    # 빈도 2회 이상만, 빈도순으로
+    candidates = [w for w, c in cnt.most_common(50) if c >= 2]
+    # 너무 일반적인 한 글자 어휘 빠진 단어도 일부 포함 (제목·머리글에서 한 번만 나오는 핵심어)
+    once = [w for w, c in cnt.most_common(80) if c == 1 and len(w) >= 3]
+    return (candidates + once)[:limit]
+
+
+def _find_target_regulation(doc_text: str, keywords: list[str]) -> str | None:
+    """업로드 문서가 어느 기존 규정에 해당하는지 찾는다.
+    - 문서 첫 600자에서 '○○ 규정' 패턴 추출 후 DB title과 매칭
+    - 못 찾으면 키워드 매칭이 가장 많은 규정 선택"""
+    head = doc_text[:600]
+    # '○○○ 규정' 패턴
+    title_m = re.search(r'([가-힣\s·\(\)]{4,30}?(?:규정|규칙|학칙|지침|세칙|기준|운영규정))', head)
+    candidate_title = title_m.group(1).strip() if title_m else ""
+
+    try:
+        conn = psycopg2.connect(_db_url())
+        cur = conn.cursor()
+
+        if candidate_title:
+            # 제목 직접 매칭 (공백 제거 후 부분일치)
+            stripped = candidate_title.replace(" ", "")
+            cur.execute("""
+                SELECT rule_title, COUNT(*) AS cnt FROM rule_chunks
+                WHERE REPLACE(rule_title, ' ', '') ILIKE %s
+                  AND (url IS NULL OR url NOT LIKE 'upload://%%')
+                GROUP BY rule_title ORDER BY cnt DESC LIMIT 1
+            """, (f"%{stripped}%",))
+            row = cur.fetchone()
+            if row:
+                conn.close()
+                return row[0]
+
+        # fallback: 키워드 점수로 가장 많이 매칭되는 규정 선택
+        if keywords:
+            # 키워드별 1회씩 SELECT 후 title별 카운트
+            from collections import Counter
+            title_score = Counter()
+            for kw in keywords[:10]:
+                cur.execute("""
+                    SELECT DISTINCT rule_title FROM rule_chunks
+                    WHERE content LIKE %s
+                      AND (url IS NULL OR url NOT LIKE 'upload://%%')
+                    LIMIT 20
+                """, (f"%{kw}%",))
+                for (t,) in cur.fetchall():
+                    title_score[t] += 1
+            conn.close()
+            if title_score:
+                top, score = title_score.most_common(1)[0]
+                # 최소 키워드 3개 이상 겹치는 규정만 인정
+                if score >= 3:
+                    return top
+        else:
+            conn.close()
+    except Exception:
+        pass
+    return None
+
+
 @router.post("/conflict/", response_model=ConflictReport)
 async def analyze_conflict(file: UploadFile = File(...)):
     doc_text = _extract(file)
     if not doc_text:
         raise HTTPException(400, "텍스트 추출 실패")
 
-    related = []
+    # ① PDF 추출 깨짐 검사
+    if _is_garbage_pdf_text(doc_text):
+        return ConflictReport(
+            summary="문서에서 의미있는 텍스트를 추출하지 못했습니다. "
+                    "스캔본 PDF이거나 텍스트가 이미지로 저장되어 있을 수 있습니다. "
+                    "HWPX, DOCX, 또는 텍스트 기반 PDF로 다시 업로드해 주세요.",
+            conflicts=[],
+            recommendations="문서를 텍스트가 추출 가능한 형식(HWPX/DOCX/텍스트 PDF)으로 변환해 다시 시도하세요.",
+            filename=file.filename or "문서",
+        )
+
+    # ② 핵심 키워드 추출
+    keywords = _extract_keywords(doc_text)
+    if not keywords:
+        return ConflictReport(
+            summary="문서에서 분석에 사용할 의미있는 키워드를 추출하지 못했습니다.",
+            conflicts=[],
+            recommendations="규정 본문이 충분히 포함된 문서인지 확인해 주세요.",
+            filename=file.filename or "문서",
+        )
+
+    # ③ 가장 관련 깊은 기존 규정 1개 식별
+    target_title = _find_target_regulation(doc_text, keywords)
+
+    # ④ 비교용 기존 규정 본문 수집
+    target_articles = []  # [(article, content), ...] — 핵심 규정의 전체 조항
+    other_chunks   = []   # 그 외 키워드 매칭 보조 청크
+
     try:
         conn = psycopg2.connect(_db_url())
-        cur  = conn.cursor()
-        words = [w for w in re.sub(r'[^\w\s]', ' ', doc_text).split() if len(w) >= 3]
-        for kw in list(dict.fromkeys(words))[:20]:
-            cur.execute(
-                "SELECT rule_title, article, content FROM rule_chunks WHERE content LIKE %s LIMIT 2",
-                (f"%{kw}%",)
-            )
-            for row in cur.fetchall():
-                e = {"title": row[0], "article": row[1], "content": row[2][:400]}
-                if e not in related:
-                    related.append(e)
-            if len(related) >= 12:
+        cur = conn.cursor()
+
+        if target_title:
+            # 핵심 규정의 모든 본문 조항을 가져온다 (개정이력 제외)
+            cur.execute("""
+                SELECT article, content FROM rule_chunks
+                WHERE rule_title = %s AND article != '개정이력'
+                  AND (url IS NULL OR url NOT LIKE 'upload://%%')
+                ORDER BY article
+                LIMIT 40
+            """, (target_title,))
+            for art, ctn in cur.fetchall():
+                target_articles.append((art, ctn))
+
+        # 보조 — 키워드로 다른 규정에서 관련 청크 일부 (다른 규정과의 충돌도 본다)
+        seen = set((target_title, a) for a, _ in target_articles)
+        for kw in keywords[:8]:
+            cur.execute("""
+                SELECT rule_title, article, content FROM rule_chunks
+                WHERE content LIKE %s AND article != '개정이력'
+                  AND (url IS NULL OR url NOT LIKE 'upload://%%')
+                LIMIT 4
+            """, (f"%{kw}%",))
+            for t, a, c in cur.fetchall():
+                if (t, a) in seen:
+                    continue
+                # 핵심 규정과 다른 규정만 보조로 (핵심 규정은 이미 위에서 다 가져옴)
+                if target_title and t == target_title:
+                    continue
+                other_chunks.append({"title": t, "article": a, "content": c})
+                seen.add((t, a))
+                if len(other_chunks) >= 8:
+                    break
+            if len(other_chunks) >= 8:
                 break
         conn.close()
     except Exception as e:
         raise HTTPException(500, f"DB 오류: {e}")
 
-    rules_ctx = "\n\n".join(
-        f"[{r['title']} {r['article']}]\n{r['content']}" for r in related[:10]
-    )
+    if not target_articles and not other_chunks:
+        return ConflictReport(
+            summary="이 문서와 비교할 만한 기존 규정을 DB에서 찾지 못했습니다. "
+                    "완전히 새로운 영역의 규정이라면 충돌 없이 신규 등록이 가능합니다.",
+            conflicts=[],
+            recommendations="유관 부서와 협의해 신규 규정으로 등록하는 것을 검토해 주세요.",
+            filename=file.filename or "문서",
+        )
 
-    prompt = f"""당신은 한성대학교 규정 전문가입니다.
-아래 [업로드 문서]와 [기존 규정]을 비교하여 충돌·불일치를 분석하세요.
+    # ⑤ 비교 컨텍스트 구성
+    rules_ctx_parts = []
+    if target_articles:
+        rules_ctx_parts.append(f"━━ 핵심 비교 대상: 「{target_title}」 ━━")
+        for art, ctn in target_articles[:30]:
+            # 청크 본문은 1500자까지
+            rules_ctx_parts.append(f"[{art}]\n{(ctn or '').strip()[:1500]}")
+    if other_chunks:
+        rules_ctx_parts.append("━━ 그 외 관련 규정 일부 (상호 충돌 검토용) ━━")
+        for c in other_chunks:
+            rules_ctx_parts.append(
+                f"[{c['title']} {c['article']}]\n{(c['content'] or '').strip()[:600]}"
+            )
+    rules_ctx = "\n\n".join(rules_ctx_parts)
+
+    # 업로드 문서는 8000자까지 (앞부분이 보통 핵심)
+    doc_for_ai = doc_text[:8000]
+
+    prompt = f"""당신은 한성대학교 규정 검토 전문가입니다.
+아래 [업로드 문서]가 [기존 규정]과 어떻게 충돌하거나 불일치하는지 **구체적으로** 분석하세요.
 
 [업로드 문서]
-{doc_text[:3000]}
+{doc_for_ai}
 
 [기존 규정]
 {rules_ctx}
 
-반드시 아래 JSON 형식으로만 응답하세요 (다른 텍스트 없이):
+━━ 분석 규칙 (반드시 지킬 것) ━━
+1. 추상적·뻔한 표현 절대 금지:
+   - 금지 예: "기존 규정과의 충돌 가능성", "현행 규정과 실무 간 괴리",
+     "일관성이 부족함", "수정이 필요해 보임", "구체적으로 명시되지 않음"
+   - 이런 식의 두루뭉술한 지적은 0점이며 빈 배열을 반환하는 것보다 못함.
+
+2. 충돌이라고 보고하려면 반드시:
+   - 업로드 문서의 어느 조/항 ("제N조 N항")에 어떤 내용이 있는지,
+   - 기존 규정의 어느 조/항에 어떤 내용이 있는지,
+   - 두 내용이 어떻게 부딪치는지 (숫자가 다른지, 조건이 다른지, 기간이 다른지, 자격이 다른지 등)
+   - 위 세 가지를 모두 명확히 인용·비교하세요.
+
+3. 좋은 충돌 보고서 예시:
+   - "업로드 문서 제12조 1항은 '재택근무 신청은 월 4회 이내'로 규정하나,
+      기존 「교직원 복무 규정」 제12조는 '재택근무 신청은 월 2회 이내'로 정하고 있어 횟수가 충돌함"
+   - "업로드 문서 제18조는 연가일수를 '연 25일'로 정하나,
+      기존 규정 제18조는 '연 21일'이며 근속연수별 가산 규정이 누락됨"
+
+4. 단순히 '업로드 문서에 N년이 언급됐다 / 어떤 문구가 있다 / 없다' 같은 표면적 차이는
+   충돌이 아닙니다. 그건 보고하지 마세요.
+
+5. 업로드 문서가 기존 규정의 '개정안'이라면, 변경하려는 부분이 명백히 다른 상위 규정이나
+   다른 조항과 부딪칠 때만 충돌로 봅니다. 단순 개정 자체는 충돌이 아닙니다.
+
+6. 충돌이 정말 없으면 conflicts는 빈 배열 []로 두고 summary에서 '검토 결과 충돌 없음'이라고
+   솔직하게 답하세요. 억지로 만들지 마세요.
+
+7. severity 기준:
+   - "높음": 상위 규정 위반, 법령 저촉, 학생/교직원 권리 침해 가능성
+   - "보통": 다른 규정과 숫자·조건이 명백히 다름, 절차상 모순
+   - "낮음": 용어 불일치, 경미한 표현 차이
+
+반드시 아래 JSON 형식으로만 응답하세요 (다른 설명·머리말 없이):
 {{
-  "summary": "전체 요약 2-3문장",
+  "summary": "업로드 문서가 「OOO 규정」과 비교했을 때 어떤 점에서 충돌하는지 2-4문장으로 구체적으로. 충돌이 없으면 '검토 결과 충돌 사항이 발견되지 않았습니다'.",
   "conflicts": [
-    {{"regulation": "규정명", "article": "조항", "issue": "충돌 내용", "severity": "높음|보통|낮음"}}
+    {{
+      "regulation": "기존 규정명",
+      "article": "기존 규정의 조항 (예: 제12조)",
+      "issue": "업로드 문서 제N조의 [원문 일부]는 ~~~로 규정하나, 기존 규정 제N조는 [원문 일부]로 정하고 있어 ~~~ 점에서 충돌함",
+      "severity": "높음|보통|낮음"
+    }}
   ],
-  "recommendations": "개선 권고사항"
+  "recommendations": "어느 조항을 어떻게 수정하면 충돌이 해소되는지 구체적으로 한 단락"
 }}"""
 
     try:
         resp = _client().chat.completions.create(
             model=GEN_MODEL,
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=1500,
+            max_tokens=2200,
+            temperature=0.1,
         )
         raw = resp.choices[0].message.content.strip()
         raw = re.sub(r'^```json\s*', '', raw)
+        raw = re.sub(r'^```\s*', '', raw)
         raw = re.sub(r'\s*```$', '', raw)
+        # JSON 블록만 추출 (혹시 앞뒤 설명이 묻어왔으면)
+        m = re.search(r'\{[\s\S]*\}', raw)
+        if m:
+            raw = m.group(0)
         parsed = json.loads(raw)
     except json.JSONDecodeError:
-        parsed = {"summary": raw[:300], "conflicts": [], "recommendations": "AI 응답 파싱 실패"}
+        parsed = {
+            "summary": "AI 응답 파싱에 실패했습니다. 다시 시도해 주세요.",
+            "conflicts": [],
+            "recommendations": "",
+        }
     except Exception as e:
         raise HTTPException(500, f"AI 분석 실패: {e}")
 
+    # ⑥ AI 결과 후처리 — 두루뭉술한 issue 필터
+    _BAD_PHRASES = [
+        "충돌 가능성", "충돌가능성",
+        "괴리", "일관성이 부족", "일관성 부족",
+        "구체적으로 명시되지", "구체적으로 명시되어 있지",
+        "수정이 필요", "검토가 필요",
+        "언급되어 있지만", "언급되었지만",
+    ]
+    cleaned_conflicts = []
+    for c in (parsed.get("conflicts") or []):
+        if not isinstance(c, dict):
+            continue
+        issue = (c.get("issue") or "").strip()
+        if len(issue) < 30:
+            continue  # 너무 짧은 지적은 버림
+        # 두루뭉술 키워드만 있고 구체적 비교가 없으면 버림
+        is_bad = any(bp in issue for bp in _BAD_PHRASES)
+        has_comparison = ("→" in issue or "그러나" in issue or "그러" in issue
+                          or "반면" in issue or "기존" in issue or "현행" in issue
+                          or "충돌" in issue)
+        if is_bad and not has_comparison:
+            continue
+        sev = c.get("severity", "보통")
+        if sev not in ("높음", "보통", "낮음"):
+            sev = "보통"
+        cleaned_conflicts.append({
+            "regulation": (c.get("regulation") or target_title or "").strip()[:80],
+            "article":    (c.get("article") or "").strip()[:60],
+            "issue":      issue,
+            "severity":   sev,
+        })
+
     return ConflictReport(
-        summary         = parsed.get("summary", ""),
-        conflicts       = parsed.get("conflicts", []),
-        recommendations = parsed.get("recommendations", ""),
-        filename        = file.filename or "문서"
+        summary         = (parsed.get("summary") or "").strip(),
+        conflicts       = cleaned_conflicts,
+        recommendations = (parsed.get("recommendations") or "").strip(),
+        filename        = file.filename or "문서",
     )
 
 
