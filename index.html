@@ -330,20 +330,32 @@ div.chat-empty p { font-size: 14px; line-height: 1.85; }
 body.sidebar-open .chat-input-wrap { left: 272px; }
 .chat-input-inner { max-width: 880px; margin: 0 auto; }
 body.chat-empty .chat-input-inner { max-width: 720px; }
-.chat-input-box { display: flex; align-items: center; gap: 10px; background: #fff;
+.chat-input-box { display: flex; align-items: flex-end; gap: 10px; background: #fff;
   border: 1.5px solid #E3EAF6; border-radius: 26px; padding: 9px 9px 9px 22px;
   box-shadow: 0 6px 24px rgba(0,48,135,0.10); transition: all 0.18s; }
 .chat-input-box:focus-within { border-color: var(--blue-mid); box-shadow: 0 6px 28px rgba(0,80,179,0.20); }
-.chat-input-box textarea { flex: 1 1 auto; min-width: 0; resize: none; height: 50px; max-height: 160px;
+.chat-input-box textarea { flex: 1 1 auto; min-width: 0; resize: none;
+  height: 50px;       /* 1줄 기본 */
+  max-height: 95px;   /* 3줄까지만 — 16px × 1.5 × 3줄 + 패딩 = ~95px, 이후 스크롤 */
   padding: 13px 0 10px; border: none; outline: none; background: transparent;
-  font-family: 'Noto Sans KR', sans-serif; font-size: 16px; line-height: 1.5; color: var(--text); }
+  font-family: 'Noto Sans KR', sans-serif; font-size: 16px; line-height: 1.5; color: var(--text);
+  overflow-y: auto;
+  scrollbar-width: thin;             /* Firefox */
+  scrollbar-color: #C5D4ED transparent;
+}
+.chat-input-box textarea::-webkit-scrollbar { width: 4px; }
+.chat-input-box textarea::-webkit-scrollbar-track { background: transparent; }
+.chat-input-box textarea::-webkit-scrollbar-thumb { background: #C5D4ED; border-radius: 2px; }
+.chat-input-box textarea::-webkit-scrollbar-thumb:hover { background: #93C5FD; }
 .chat-input-box textarea::placeholder { color: #B0BDD4; }
 .chat-send { width: 50px; height: 50px; min-width: 50px; max-width: 50px; min-height: 50px; max-height: 50px;
-  flex: 0 0 50px; aspect-ratio: 1 / 1; border: none; border-radius: 14px;
+  flex: 0 0 50px; aspect-ratio: 1 / 1; border: none; border-radius: 25px;   /* 입력창과 같은 비율로 동그랗게 */
   background: linear-gradient(150deg, #003087, #0060CC); color: #fff;
-  font-size: 30px; font-weight: 700; line-height: 1; padding: 0;
+  font-size: 30px; font-weight: 900; line-height: 1; padding: 0;
   cursor: pointer; transition: all 0.18s;
-  display: flex; align-items: center; justify-content: center; align-self: center; }
+  display: flex; align-items: center; justify-content: center;
+  margin-bottom: 0;   /* 멀티라인일 때도 바닥 정렬 */
+}
 .chat-send:hover { transform: scale(1.06); box-shadow: 0 4px 14px rgba(0,48,135,0.4); }
 .chat-send:disabled { opacity: 0.4; cursor: not-allowed; transform: none; box-shadow: none; }
 .chat-input-hint { text-align: center; font-size: 12px; color: #B0BDD4; margin-top: 8px; }
@@ -434,7 +446,7 @@ body.chat-empty .chat-input-inner { max-width: 720px; }
           <div class="chat-input-inner">
             <div class="chat-input-box">
               <textarea id="questionInput" placeholder="규정에 대해 무엇이든 물어보세요…" rows="1"></textarea>
-              <button class="chat-send" id="askBtn" onclick="ask()" title="질문 보내기">↑</button>
+              <button class="chat-send" id="askBtn" onclick="ask()" title="질문 보내기"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg></button>
             </div>
             <div class="chat-input-hint">Enter로 전송 · Shift+Enter로 줄바꿈</div>
           </div>
@@ -791,10 +803,10 @@ function filterRules() {
   ta.addEventListener('keydown', e => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ask(); }
   });
-  // textarea 자동 높이 조절
+  // textarea 자동 높이 조절 (1줄 50px → 3줄 95px, 그 이상은 스크롤)
   ta.addEventListener('input', () => {
-    ta.style.height = '42px';
-    ta.style.height = Math.min(ta.scrollHeight, 140) + 'px';
+    ta.style.height = '50px';
+    ta.style.height = Math.min(ta.scrollHeight, 95) + 'px';
   });
   // 초기 진입이 챗봇이면 main 와이드 모드
   document.querySelector('main').classList.add('chat-mode');
@@ -802,15 +814,34 @@ function filterRules() {
 
 // 답변 본문 포맷 (소제목 볼드)
 function formatAnswerHTML(text) {
-  const lines = (text || '').split('\n');
+  // 마크다운 정리 — Claude가 출력한 ** ## - 등 변환
+  let processed = text || '';
+  // 1) 헤더(#) 제거
+  processed = processed.replace(/^#{1,6}\s*(.+)$/gm, '$1');
+  // 2) ***볼드+이탤릭*** / **볼드** → <strong>  (이탤릭은 무시하고 굵게만)
+  processed = processed.replace(/\*{2,3}([^*\n]+)\*{2,3}/g, '<strong>$1</strong>');
+  // 3) __볼드__ → <strong>
+  processed = processed.replace(/__([^_\n]+)__/g, '<strong>$1</strong>');
+  // 4) 백틱 ` ` → 그냥 평문
+  processed = processed.replace(/`+([^`]*)`+/g, '$1');
+  // 5) 인라인 *이탤릭* → 평문 (강조 의도가 아닌 단순 강조어는 굳이 기울이지 않음)
+  processed = processed.replace(/(?<![*\w])\*([^*\n]+?)\*(?!\*)/g, '$1');
+  // 6) > 인용 마커 → 제거
+  processed = processed.replace(/^>\s*/gm, '');
+  // 7) --- 구분선 제거
+  processed = processed.replace(/^[-*_]{3,}\s*$/gm, '');
+
+  const lines = processed.split('\n');
   return lines.map((line, i) => {
     const trimmed = line.trim();
     if (!trimmed) return '';
     const prevEmpty = i === 0 || !lines[i-1].trim();
     const nextEmpty = i === lines.length-1 || !lines[i+1].trim();
-    const isHeading = trimmed.length <= 22
-      && !/^[-•*]/.test(trimmed)
-      && !/^\d+[.)]\s/.test(trimmed)
+    // <strong>...</strong> 태그 안 내용 길이로 판단
+    const plain = trimmed.replace(/<[^>]+>/g, '');
+    const isHeading = plain.length <= 22
+      && !/^[-•*]/.test(plain)
+      && !/^\d+[.)]\s/.test(plain)
       && prevEmpty && nextEmpty;
     return isHeading ? `<b style="font-size:18px; color:#2F5A9E;">${trimmed}</b>` : trimmed;
   }).join('\n');
@@ -858,9 +889,10 @@ function buildExtras(question, data) {
     });
 
     // ⑤ 같은 규정이면 조항만 합쳐 1줄로 (예: 제5조 · 제7조)
+    //    url에 시행일 쿼리스트링 등이 달라도 같은 규정이면 하나로 합침
     const grouped = {}; const order = [];
     unique.forEach(s => {
-      const key = normalize(s.title) + '|' + (s.url || '');
+      const key = normalize(s.title);   // title만으로 그룹 (url 무시)
       if (!grouped[key]) { grouped[key] = { ...s, articles: [] }; order.push(key); }
       if (s.article && !grouped[key].articles.includes(s.article)) {
         grouped[key].articles.push(s.article);
@@ -1024,7 +1056,7 @@ async function ask() {
   const btn = document.getElementById('askBtn');
   const stream = document.getElementById('chatStream');
 
-  // 새 대화면 생성 + 로그에 등록 (첫 질문일 때만 로그 추가)
+  // 새 대화면 생성 + 로그 등록
   if (!currentChat) {
     const now = new Date();
     const time = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
@@ -1039,73 +1071,196 @@ async function ask() {
     document.getElementById('sidebar').classList.add('open');
     document.body.classList.add('sidebar-open');
     document.getElementById('sidebarIcon').textContent = '✕';
-    // 빈 안내 화면 비우기
-    // 빈 안내(추천 카드) 화면 비우기
-    // 빈 안내(추천 카드) 화면 비우기 + 페이지 스크롤 허용
     if (stream.querySelector('.chat-welcome')) stream.innerHTML = '';
     document.body.classList.remove('chat-empty');
   }
 
   input.value = '';
-  input.style.height = '42px';
+  input.style.height = '50px';
   btn.disabled = true;
 
-  // ① 사용자 질문 즉시 말풍선으로 표시
+  // ① 사용자 질문 즉시 표시
   const userDiv = document.createElement('div');
   userDiv.className = 'msg-user';
   userDiv.innerHTML = `<div class="msg-user-bubble">${escHtml(q)}</div>`;
   stream.appendChild(userDiv);
 
-  // ② 로딩 메시지 즉시 표시
+  // ② 로딩 메시지
   const loadingEl = document.createElement('div');
   loadingEl.className = 'chat-loading';
   loadingEl.innerHTML = '<div class="spinner"></div><span>규정을 검색하는 중<span class="dots"></span></span>';
   stream.appendChild(loadingEl);
   scrollToBottom();
 
-  try {
-    currentChat.messages.push({ role: 'user', content: q });
-    const res = await fetch(`${API}/query`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question: q, messages: currentChat.messages })
-    });
-    if (!res.ok) { const err = await res.json(); throw new Error(err.detail || '서버 오류'); }
-    const data = await res.json();
-    currentChat.messages.push({ role: 'assistant', content: data.answer });
-    currentChat.turns.push({ q: q, data: data });
-    saveHistory();
-    renderHistory();
+  currentChat.messages.push({ role: 'user', content: q });
 
-    // ③ 로딩 제거하고 AI 답변 박스 만들기
+  // AI 답변 박스 (아직 안 만듦 — meta 받자마자 생성)
+  let aiDiv = null, bodyEl = null, extrasEl = null;
+  let rawBuffer = '';      // 화면에 표시된 누적 문자
+  let pendingChars = '';   // 아직 화면에 안 뿌린 대기 문자 (글자 단위 큐)
+  let typingTimer = null;
+  let streamingDone = false;   // Claude 토큰 다 받았는지
+  let metaData = null;
+
+  function ensureAiBox(found) {
+    if (aiDiv) return;
     loadingEl.remove();
-    const bodyCls = data.found === false ? ' nf' : '';
-    const aiDiv = document.createElement('div');
+    const bodyCls = (found === false) ? ' nf' : '';
+    aiDiv = document.createElement('div');
     aiDiv.className = 'msg-ai';
     aiDiv.innerHTML = `
       <div class="msg-ai-head"><div class="msg-ai-icon">⚖</div><div class="msg-ai-name">규정 AI 답변</div></div>
-      <div class="msg-ai-body${bodyCls}"></div>
+      <div class="msg-ai-body${bodyCls}"><span class="typing-cursor"></span></div>
       <div class="msg-ai-extras" style="display:none"></div>`;
     stream.appendChild(aiDiv);
-    const body = aiDiv.querySelector('.msg-ai-body');
-    const extras = aiDiv.querySelector('.msg-ai-extras');
+    bodyEl = aiDiv.querySelector('.msg-ai-body');
+    extrasEl = aiDiv.querySelector('.msg-ai-extras');
+    scrollToBottom();
+  }
 
-    // ④ 타이핑 애니메이션
-    typeAnswer(body, data.answer || '', () => {
-      extras.innerHTML = buildExtras(q, data);
-      extras.style.display = '';
-      scrollToBottom();
+  // 본문 점진적 렌더링
+  function renderProgressive() {
+    if (!bodyEl) return;
+    // raw에 출처/부서/관련질문 라벨이 보이기 시작하면 거기까지만 표시
+    let visible = rawBuffer;
+    const cutMarkers = [
+      '\n**출처**', '\n출처:', '\n출처 :',
+      '\n**담당부서**', '\n📞 담당부서', '\n📞담당부서',
+      '\n**관련 질문**', '\n💡', '\n관련 질문', '\n연관 질문',
+    ];
+    for (const m of cutMarkers) {
+      const idx = visible.indexOf(m);
+      if (idx >= 0) { visible = visible.slice(0, idx); break; }
+    }
+    bodyEl.innerHTML = formatAnswerHTML(visible) + '<span class="typing-cursor"></span>';
+  }
+
+  // 큐에 쌓인 문자를 한 글자씩 흘려보냄 (타다닥 느낌)
+  //   - 일반 문자: 한 번에 1글자, 약 18ms
+  //   - 줄바꿈/공백 뒤: 살짝 더 빠르게 (지연 적게)
+  //   - 큐가 많이 밀려 있으면 한 번에 여러 글자(밀린 거 따라잡기)
+  function tickTyping() {
+    if (!pendingChars.length) {
+      if (streamingDone) {
+        // 다 끝남 — 커서 제거는 done 이벤트에서 처리
+        typingTimer = null;
+        return;
+      }
+      // 데이터 더 오기 기다림
+      typingTimer = setTimeout(tickTyping, 30);
+      return;
+    }
+    // 큐 길이에 따라 한 번에 흘릴 글자 수 결정
+    let step = 1;
+    if (pendingChars.length > 80)      step = 4;   // 너무 밀리면 4글자씩
+    else if (pendingChars.length > 30) step = 2;
+    const chunk = pendingChars.slice(0, step);
+    pendingChars = pendingChars.slice(step);
+    rawBuffer += chunk;
+    renderProgressive();
+    // 줄바꿈이나 마침표 뒤엔 살짝 더 머무르기 (자연스러움)
+    let delay = 18;
+    if (/[\n]/.test(chunk)) delay = 60;
+    else if (/[.!?。]/.test(chunk)) delay = 35;
+    typingTimer = setTimeout(tickTyping, delay);
+  }
+
+  function startTyping() {
+    if (typingTimer) return;
+    typingTimer = setTimeout(tickTyping, 0);
+  }
+
+  try {
+    const res = await fetch(`${API}/query-stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question: q, messages: currentChat.messages })
     });
+    if (!res.ok || !res.body) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || '서버 오류');
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let leftover = '';
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      leftover += decoder.decode(value, { stream: true });
+
+      // SSE 이벤트 단위로 파싱 (이벤트 사이 빈 줄로 구분)
+      const blocks = leftover.split('\n\n');
+      leftover = blocks.pop();   // 마지막 미완성은 다음 청크에 이어붙임
+
+      for (const block of blocks) {
+        if (!block.trim()) continue;
+        let evtType = 'message', dataLine = '';
+        for (const line of block.split('\n')) {
+          if (line.startsWith('event:')) evtType = line.slice(6).trim();
+          else if (line.startsWith('data:')) dataLine += line.slice(5).trim();
+        }
+        if (!dataLine) continue;
+        let payload;
+        try { payload = JSON.parse(dataLine); } catch { continue; }
+
+        if (evtType === 'meta') {
+          metaData = payload;
+          ensureAiBox(payload.found);
+        } else if (evtType === 'token') {
+          if (!aiDiv) ensureAiBox(true);
+          pendingChars += (payload.t || '');
+          startTyping();
+        } else if (evtType === 'done') {
+          // 서버에서 토큰 다 보냄 — 큐 다 흘러나갈 때까지 기다린 뒤 마무리
+          streamingDone = true;
+          if (!aiDiv) ensureAiBox(payload.found);
+          // 큐 비워질 때까지 기다린 뒤 최종 본문으로 교체
+          const finalize = () => {
+            if (pendingChars.length > 0) { setTimeout(finalize, 50); return; }
+            const finalAnswer = payload.answer || rawBuffer;
+            bodyEl.innerHTML = formatAnswerHTML(finalAnswer);
+            const data = {
+              answer: finalAnswer,
+              sources: payload.sources || (metaData && metaData.sources) || [],
+              dept: payload.dept || (metaData && metaData.dept) || '',
+              dept_phone: payload.dept_phone || (metaData && metaData.dept_phone) || '',
+              followups: payload.followups || [],
+              found: payload.found !== false,
+            };
+            extrasEl.innerHTML = buildExtras(q, data);
+            extrasEl.style.display = '';
+            scrollToBottom();
+            currentChat.messages.push({ role: 'assistant', content: finalAnswer });
+            currentChat.turns.push({ q: q, data: data });
+            saveHistory();
+            renderHistory();
+          };
+          finalize();
+        } else if (evtType === 'error') {
+          throw new Error(payload.error || '스트리밍 오류');
+        }
+      }
+    }
   } catch(e) {
-    loadingEl.remove();
-    const errDiv = document.createElement('div');
-    errDiv.className = 'msg-ai';
-    errDiv.innerHTML = `
-      <div class="msg-ai-head"><div class="msg-ai-icon">⚖</div><div class="msg-ai-name">규정 AI 답변</div></div>
-      <div class="msg-ai-body nf">오류: ${escHtml(e.message)}\n서버가 실행 중인지 확인하세요.</div>`;
-    stream.appendChild(errDiv);
+    streamingDone = true;
+    if (typingTimer) { clearTimeout(typingTimer); typingTimer = null; }
+    if (loadingEl.isConnected) loadingEl.remove();
+    if (!aiDiv) {
+      const errDiv = document.createElement('div');
+      errDiv.className = 'msg-ai';
+      errDiv.innerHTML = `
+        <div class="msg-ai-head"><div class="msg-ai-icon">⚖</div><div class="msg-ai-name">규정 AI 답변</div></div>
+        <div class="msg-ai-body nf">오류: ${escHtml(e.message)}\n서버가 실행 중인지 확인하세요.</div>`;
+      stream.appendChild(errDiv);
+    } else if (bodyEl) {
+      bodyEl.innerHTML += `<div style="color:#C0392B;font-size:13px;margin-top:8px">⚠ 오류: ${escHtml(e.message)}</div>`;
+    }
     currentChat.turns.push({ q: q, data: { answer: '오류: ' + e.message, found: false } });
     scrollToBottom();
   } finally {
+    streamingDone = true;
     btn.disabled = false;
     input.focus();
   }
@@ -1258,5 +1413,26 @@ function charDiff(oldStr, newStr) {
   update();
 })();
 </script>
+<!-- 버전 비교 모달 -->
+<div class="diff-overlay" id="diffOverlay" onclick="if(event.target.id==='diffOverlay') closeDiff()">
+  <div class="diff-modal">
+    <div class="diff-head">
+      <div class="diff-head-title" id="diffTitle">버전 비교</div>
+      <select class="diff-ver-select" id="diffVerSelect" onchange="renderDiffPair()"></select>
+      <button class="diff-close" onclick="closeDiff()" title="닫기">✕</button>
+    </div>
+    <div class="diff-cols">
+      <div class="diff-col diff-col-old">
+        <div class="diff-col-head" id="diffOldHead">이전 버전</div>
+        <div class="diff-col-body" id="diffOldBody"></div>
+      </div>
+      <div class="diff-col diff-col-new">
+        <div class="diff-col-head" id="diffNewHead">최신 버전</div>
+        <div class="diff-col-body" id="diffNewBody"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>

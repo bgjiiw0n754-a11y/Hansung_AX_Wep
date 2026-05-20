@@ -257,15 +257,16 @@ header .crumb .cur { color: #fff; font-weight: 600; font-size: 12px; }
 .fmt-mark { border-radius: 3px; padding: 1px 2px; cursor: help; position: relative; }
 .fmt-mark.format     { background: #FFE3BF; box-shadow: 0 0 0 1px #E0A85C inset; }
 .fmt-mark.expression { background: #D6E8FF; box-shadow: 0 0 0 1px #7FAEE0 inset; }
-/* 툴팁 */
-.fmt-tip { display: none; position: absolute; bottom: 130%; left: 50%; transform: translateX(-50%);
-  width: 230px; background: #1A2340; color: #fff; font-size: 12px; font-weight: 400; line-height: 1.6;
-  padding: 9px 12px; border-radius: 9px; z-index: 50; box-shadow: 0 6px 24px rgba(0,0,0,0.28);
-  white-space: normal; text-align: left; }
-.fmt-tip::after { content: ''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%);
-  border: 6px solid transparent; border-top-color: #1A2340; }
-.fmt-tip-label { font-size: 10px; font-weight: 700; letter-spacing: 0.5px; margin-bottom: 3px; opacity: 0.7; }
-.fmt-mark:hover .fmt-tip { display: block; }
+/* 툴팁 — 부모 overflow 무시하고 화면 위에 띄움. JS로 위치 조정 */
+.fmt-tip { display: none; position: fixed; min-width: 200px; max-width: 360px;
+  background: #1A2340; color: #fff; font-size: 12px; font-weight: 400; line-height: 1.6;
+  padding: 10px 13px; border-radius: 9px; z-index: 9999;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.32);
+  white-space: normal; text-align: left;
+  pointer-events: none; /* 마우스 이벤트 통과 — 호버 깜박임 방지 */ }
+.fmt-tip-label { font-size: 10px; font-weight: 700; letter-spacing: 0.5px; margin-bottom: 4px; opacity: 0.75; }
+.fmt-mark:hover .fmt-tip,
+.fmt-mark.show-tip .fmt-tip { display: block; }
 /* ════════════════ 충돌 분석 ════════════════ */
 .conflict-intro { background: #F8FAFD; border: 1px solid var(--border); border-radius: 10px;
   padding: 14px 18px; margin-bottom: 16px; font-size: 13px; line-height: 1.85; color: var(--text-muted); }
@@ -567,22 +568,43 @@ header .crumb .cur { color: #fff; font-weight: 600; font-size: 12px; }
 var token = null;
 var selectedFiles = [];  // File 객체 배열
 
-// 로그인 확인
+// 로그인 확인 — 서버에 토큰 유효성 확인 후 통과해야 페이지가 보임
 (function() {
+  // 검증 중엔 페이지 내용 숨김 (잠깐 보이는 깜빡임 방지)
+  document.documentElement.style.visibility = 'hidden';
+
   var saved = localStorage.getItem('hsu_token');
-  if (!saved) { window.location.href = '/login-page'; return; }
+  if (!saved) {
+    window.location.replace('/login-page');
+    return;
+  }
+
+  // 1차: 클라이언트에서 JWT 만료 빠르게 검사
   try {
     var payload = JSON.parse(atob(saved.split('.')[1]));
-    if (payload.exp * 1000 < Date.now()) {
+    if (!payload.exp || payload.exp * 1000 < Date.now()) {
       localStorage.removeItem('hsu_token');
-      window.location.href = '/login-page';
+      window.location.replace('/login-page');
       return;
     }
     token = saved;
   } catch(e) {
     localStorage.removeItem('hsu_token');
-    window.location.href = '/login-page';
+    window.location.replace('/login-page');
+    return;
   }
+
+  // 2차: 서버에 실제 유효성 확인 (SECRET_KEY 변경, 위조 등 잡기)
+  fetch('/auth/check', { headers: { 'Authorization': 'Bearer ' + saved } })
+    .then(function(res) {
+      if (!res.ok) throw new Error('invalid');
+      // 통과 — 페이지 표시
+      document.documentElement.style.visibility = 'visible';
+    })
+    .catch(function() {
+      localStorage.removeItem('hsu_token');
+      window.location.replace('/login-page');
+    });
 })();
 
 /* ── 파일 선택 ── */
@@ -1504,6 +1526,39 @@ function renderFormatPanel(panel, text, issues, errMsg) {
       '<span><span class="dot" style="background:#D6E8FF"></span>표현 제안 ' + expCnt + '건</span>' +
       '<span style="color:#B0BDD4">표시된 부분에 마우스를 올리면 조언이 나옵니다</span>' +
     '</div>';
+
+  // 툴팁 위치 동적 계산 — viewport 밖으로 안 나가게
+  panel.querySelectorAll('.fmt-mark').forEach(function(mark) {
+    var tip = mark.querySelector('.fmt-tip');
+    if (!tip) return;
+    mark.addEventListener('mouseenter', function() {
+      // 일단 보이게 해서 크기 측정
+      tip.style.visibility = 'hidden';
+      tip.style.display = 'block';
+      var mr = mark.getBoundingClientRect();
+      var tr = tip.getBoundingClientRect();
+      var vw = window.innerWidth, vh = window.innerHeight;
+
+      // 기본 위치: mark 위 중앙
+      var top = mr.top - tr.height - 10;
+      var left = mr.left + (mr.width / 2) - (tr.width / 2);
+
+      // 위로 못 띄울 만큼 위에 있으면 → mark 아래
+      if (top < 10) top = mr.bottom + 10;
+      // 좌우 경계 보정
+      if (left < 8) left = 8;
+      if (left + tr.width > vw - 8) left = vw - tr.width - 8;
+      // 세로 경계 보정
+      if (top + tr.height > vh - 8) top = vh - tr.height - 8;
+
+      tip.style.top = top + 'px';
+      tip.style.left = left + 'px';
+      tip.style.visibility = '';
+    });
+    mark.addEventListener('mouseleave', function() {
+      tip.style.display = '';
+    });
+  });
 }
 
 loadRuleList();

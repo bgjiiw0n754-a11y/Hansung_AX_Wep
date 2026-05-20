@@ -2,28 +2,35 @@ import os
 import jwt
 import difflib
 import shutil
+import time
+import requests
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 load_dotenv()
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 import psycopg2
-from sentence_transformers import SentenceTransformer
 from groq import Groq
+from anthropic import Anthropic
+import voyageai
 from routers.teacher import router as teacher_router, set_ai_client
 import re as _re
+_re2 = _re   # _re2 는 _re의 별칭 (전역에서 사용 가능)
 import json as _json
 from pathlib import Path as _Path
 from collections import defaultdict as _defaultdict
 import secrets as _secrets
 
 # ── 환경 변수 ─────────────────────────────────────────────────────
-GROQ_KEY = os.getenv("GROQ_API_KEY")
-DB_URL   = os.getenv("DATABASE_URL")
+GROQ_KEY      = os.getenv("GROQ_API_KEY", "")            # fallback / Groq 일부 기능
+ANTHROPIC_KEY = os.getenv("ANTHROPIC_API_KEY", "")       # 메인 LLM
+UPSTAGE_KEY   = os.getenv("UPSTAGE_API_KEY", "")         # 임베딩
+VOYAGE_KEY    = os.getenv("VOYAGE_API_KEY", "")          # rerank
+DB_URL        = os.getenv("DATABASE_URL")
 
 _raw_key   = os.getenv("SECRET_KEY", "")
 SECRET_KEY = _raw_key if len(_raw_key) >= 32 else _secrets.token_hex(32)
@@ -33,19 +40,148 @@ if len(_raw_key) < 32:
 ADMIN_ID = os.getenv("ADMIN_ID", "admin")
 ADMIN_PW = os.getenv("ADMIN_PW", "1234")
 
-if not GROQ_KEY:
-    raise RuntimeError("❌ GROQ_API_KEY 미설정")
+if not ANTHROPIC_KEY:
+    raise RuntimeError("❌ ANTHROPIC_API_KEY 미설정")
+if not UPSTAGE_KEY:
+    raise RuntimeError("❌ UPSTAGE_API_KEY 미설정")
+if not VOYAGE_KEY:
+    raise RuntimeError("❌ VOYAGE_API_KEY 미설정")
 if not DB_URL:
     raise RuntimeError("❌ DATABASE_URL 미설정")
 
-EMB_MODEL = "paraphrase-multilingual-MiniLM-L12-v2"
-GEN_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
-TOP_K     = 10
+# 모델 식별자
+UPSTAGE_EMB_PASSAGE_MODEL = "solar-embedding-1-large-passage"   # 적재용 (build_db에서 사용)
+UPSTAGE_EMB_QUERY_MODEL   = "solar-embedding-1-large-query"     # 검색용 (질문 임베딩)
+UPSTAGE_EMB_URL           = "https://api.upstage.ai/v1/solar/embeddings"
+VOYAGE_RERANK_MODEL       = "rerank-2"
+CLAUDE_MODEL              = "claude-sonnet-4-5"
 
-print("임베딩 모델 로딩 중...")
-emb_model = SentenceTransformer(EMB_MODEL)
-print("임베딩 모델 로딩 완료!")
-groq_client = Groq(api_key=GROQ_KEY)
+# 백업/fallback용 Groq 모델
+GROQ_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
+
+# 검색 파라미터
+TOP_K_VECTOR  = 30   # 임베딩으로 후보 30개 추리고
+TOP_K_RERANK  = 8    # Voyage로 그 중 진짜 관련 8개만 골라 Claude에 넘김
+
+# 클라이언트 초기화
+anthropic_client = Anthropic(api_key=ANTHROPIC_KEY)
+voyage_client    = voyageai.Client(api_key=VOYAGE_KEY)
+groq_client      = Groq(api_key=GROQ_KEY) if GROQ_KEY else None
+
+print(f"✅ Anthropic ({CLAUDE_MODEL})")
+print(f"✅ Upstage embeddings ({UPSTAGE_EMB_QUERY_MODEL})")
+print(f"✅ Voyage rerank ({VOYAGE_RERANK_MODEL})")
+if groq_client:
+    print(f"✅ Groq fallback ({GROQ_MODEL})")
+
+
+# ── Upstage 임베딩 헬퍼 ───────────────────────────────────────────
+def upstage_embed_query(text: str, retries: int = 2) -> list[float]:
+    """질문을 4096차원 벡터로 변환 (검색용 query 모델)."""
+    headers = {"Authorization": f"Bearer {UPSTAGE_KEY}", "Content-Type": "application/json"}
+    payload = {"model": UPSTAGE_EMB_QUERY_MODEL, "input": text[:8000]}
+    for attempt in range(retries + 1):
+        try:
+            r = requests.post(UPSTAGE_EMB_URL, headers=headers, json=payload, timeout=30)
+            if r.status_code == 429:
+                time.sleep((attempt + 1) * 2)
+                continue
+            r.raise_for_status()
+            return r.json()["data"][0]["embedding"]
+        except Exception as e:
+            if attempt >= retries:
+                raise RuntimeError(f"Upstage 임베딩 실패: {e}")
+            time.sleep((attempt + 1) * 1)
+    return []
+
+
+def upstage_embed_passage(texts: list[str], retries: int = 2) -> list[list[float]]:
+    """본문 여러 개를 한 번에 임베딩 (적재용 passage 모델, server에서도 업로드 규정 적재 시 사용)."""
+    headers = {"Authorization": f"Bearer {UPSTAGE_KEY}", "Content-Type": "application/json"}
+    payload = {"model": UPSTAGE_EMB_PASSAGE_MODEL, "input": [t[:8000] for t in texts]}
+    for attempt in range(retries + 1):
+        try:
+            r = requests.post(UPSTAGE_EMB_URL, headers=headers, json=payload, timeout=60)
+            if r.status_code == 429:
+                time.sleep((attempt + 1) * 2)
+                continue
+            r.raise_for_status()
+            return [d["embedding"] for d in r.json()["data"]]
+        except Exception as e:
+            if attempt >= retries:
+                raise RuntimeError(f"Upstage 임베딩 실패: {e}")
+            time.sleep((attempt + 1) * 1)
+    return []
+
+
+# ── Voyage rerank 헬퍼 ────────────────────────────────────────────
+def voyage_rerank(query: str, documents: list[str], top_k: int = TOP_K_RERANK) -> list[tuple[int, float]]:
+    """후보 문서를 질문과의 관련도순으로 재정렬.
+    반환: [(원본 인덱스, 관련도 점수)] — top_k개"""
+    try:
+        result = voyage_client.rerank(
+            query=query,
+            documents=documents,
+            model=VOYAGE_RERANK_MODEL,
+            top_k=top_k,
+        )
+        return [(r.index, r.relevance_score) for r in result.results]
+    except Exception as e:
+        print(f"⚠️ Voyage rerank 실패, 상위 {top_k}개 그대로 사용: {e}")
+        # fallback — 그냥 앞에서부터
+        return [(i, 1.0) for i in range(min(top_k, len(documents)))]
+
+
+# ── Claude 호출 헬퍼 ──────────────────────────────────────────────
+def claude_chat(messages: list[dict], system: str = "", max_tokens: int = 2500,
+                temperature: float = 0.3, model: str = None) -> str:
+    """Claude messages API 호출. messages는 [{role, content}] 형식.
+    fallback: Anthropic 실패 시 Groq로 백업."""
+    try:
+        kwargs = {
+            "model": model or CLAUDE_MODEL,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "messages": messages,
+        }
+        if system:
+            kwargs["system"] = system
+        resp = anthropic_client.messages.create(**kwargs)
+        # content는 [TextBlock] 형태
+        return "".join(b.text for b in resp.content if hasattr(b, "text"))
+    except Exception as e:
+        print(f"⚠️ Claude 실패, Groq fallback: {e}")
+        if not groq_client:
+            raise
+        # Groq 형식으로 변환
+        groq_msgs = []
+        if system:
+            groq_msgs.append({"role": "system", "content": system})
+        groq_msgs.extend(messages)
+        resp = groq_client.chat.completions.create(
+            model=GROQ_MODEL,
+            messages=groq_msgs,
+            max_tokens=max_tokens,
+            temperature=temperature,
+        )
+        return resp.choices[0].message.content or ""
+
+
+def claude_stream(messages: list[dict], system: str = "", max_tokens: int = 1500,
+                  temperature: float = 0.3, model: str = None):
+    """Claude messages API 스트리밍 — yield text chunks. SSE/StreamingResponse용."""
+    kwargs = {
+        "model": model or CLAUDE_MODEL,
+        "max_tokens": max_tokens,
+        "temperature": temperature,
+        "messages": messages,
+    }
+    if system:
+        kwargs["system"] = system
+    with anthropic_client.messages.stream(**kwargs) as stream:
+        for text in stream.text_stream:
+            yield text
+
 
 app = FastAPI()
 app.add_middleware(
@@ -56,7 +192,13 @@ app.add_middleware(
 security = HTTPBearer()
 
 app.include_router(teacher_router)
-set_ai_client(groq_client)
+# teacher 라우터는 Anthropic 클라이언트와 헬퍼를 받음 (충돌분석에서 사용)
+set_ai_client({
+    "anthropic": anthropic_client,
+    "claude_model": CLAUDE_MODEL,
+    "claude_chat": claude_chat,
+    "groq": groq_client,
+})
 
 def _load_dept_phones():
     """dept_phones.json에서 부서-직통번호 매핑을 로드. 없으면 빈 사전."""
@@ -73,6 +215,30 @@ def _load_dept_phones():
 
 DEPT_PHONE = _load_dept_phones()
 DEFAULT_PHONE = "02-760-4114"   # 대학 대표번호
+
+# 규정 title → 담당부서 매핑 캐시 (DB의 department 컬럼이 비어있을 때 fallback)
+_TITLE_TO_DEPT_CACHE = {"data": None}
+
+def _get_title_to_dept_map() -> dict:
+    """hansung_rules_history.json의 최상위 department 정보를 title→부서 매핑으로 캐시.
+    DB의 department 컬럼은 versions[]를 따라가 비어있는 경우가 많아 fallback 필요."""
+    if _TITLE_TO_DEPT_CACHE["data"] is not None:
+        return _TITLE_TO_DEPT_CACHE["data"]
+    mapping = {}
+    try:
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            "hansung_rules_history.json")
+        with open(path, "r", encoding="utf-8") as f:
+            data = _json.load(f)
+        for r in data:
+            title = (r.get("title") or "").strip()
+            dept = (r.get("department") or "").strip()
+            if title and dept:
+                mapping[title] = dept
+    except Exception as e:
+        print(f"[title_to_dept] 로드 실패: {e}")
+    _TITLE_TO_DEPT_CACHE["data"] = mapping
+    return mapping
 
 SYSTEM = """
 당신은 한성대학교 규정 전문 안내 AI입니다.
@@ -156,8 +322,13 @@ N호     → 1. 2. 3. 형태로 나열
 
 **담당부서**
 부서 정보 있을 때만 한 줄로:
-📞 담당부서: 학생지원팀
-(부서명만 쓰고, 전화번호는 절대 답변에 넣지 마세요. 시스템이 별도로 정확한 직통번호를 표시합니다.)
+📞 담당부서: (참고한 규정의 실제 담당부서명)
+
+⚠️ 중요:
+- 반드시 [참고 자료]의 'department' 필드에 적힌 **실제 부서명을 그대로** 쓰세요.
+- "학생지원팀", "교무처" 같은 부서명을 **임의로 만들어내지 마세요**. 한성대학교에 실제 존재하는 부서명만 사용.
+- 참고 자료에 부서 정보가 없으면 이 섹션 전체를 생략하세요.
+- 전화번호는 절대 답변에 넣지 마세요. 시스템이 별도로 정확한 직통번호를 표시합니다.
 
 **관련 질문**
 정확히 4개, 질문만, 답변 포함 금지, Q:/A: 금지.
@@ -279,6 +450,13 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
         raise HTTPException(status_code=401, detail="토큰이 만료되었습니다.")
     except Exception:
         raise HTTPException(status_code=401, detail="인증에 실패했습니다.")
+
+
+# ── 토큰 유효성 확인 (관리자 페이지 진입 시 호출) ──────────────────
+@app.get("/auth/check")
+def auth_check(payload: dict = Depends(verify_token)):
+    """토큰이 유효한지만 확인. 유효하면 200, 아니면 401."""
+    return {"ok": True, "sub": payload.get("sub")}
 
 
 # ── 텍스트 추출 헬퍼 ──────────────────────────────────────────────
@@ -428,24 +606,22 @@ async def upload_regulation(file: UploadFile = File(...), payload: dict = Depend
     chunks = _chunk_text(text)
     if not chunks: raise HTTPException(400, "청크 분할 실패")
 
-    try:    embeddings = emb_model.encode(chunks, normalize_embeddings=True).tolist()
+    try:    embeddings = upstage_embed_passage(chunks)
     except Exception as e: raise HTTPException(500, f"임베딩 실패: {e}")
 
     CHAP_MAP_UP = {"1":"학교법인","2":"학칙","3":"학사행정","4":"부속기관",
                    "5":"부설기관","6":"위원회","7":"산학협력단","8":"학생군사교육단"}
     try:
-        clf = groq_client.chat.completions.create(
-            model=GEN_MODEL,
+        raw_clf = claude_chat(
             messages=[{"role":"user","content":f"""한성대학교 규정 체계에서 다음 문서가 속하는 편 번호(1~8)만 답하세요.
 1편:학교법인 2편:학칙 3편:학사행정 4편:부속기관
 5편:부설기관 6편:위원회 7편:산학협력단 8편:학생군사교육단
 규정명: {filename}
 내용: {text[:300]}
 숫자 하나만 답하세요:"""}],
-            max_tokens=3,
+            max_tokens=4, temperature=0,
         )
-        raw_clf  = clf.choices[0].message.content.strip()
-        m_clf    = _re.search(r'[1-8]', raw_clf)
+        m_clf    = _re.search(r'[1-8]', raw_clf or "")
         chap_num = m_clf.group(0) if m_clf else "3"
     except: chap_num = "3"
 
@@ -790,35 +966,40 @@ def query(req: Q):
     if not q:
         raise HTTPException(400, "Empty question")
 
+    # ── 1) 키워드 확장 (Claude, 빠르게) ────────────────────────────
+    extra_keywords = []
     try:
-        expand_resp = groq_client.chat.completions.create(
-            model=GEN_MODEL,
-            messages=[{"role": "user", "content": f"""다음 질문에서 한국 대학 규정 검색에 쓸 핵심 키워드를 추출하세요.
-동의어, 약어, 관련 법령 용어도 포함하세요. 쉼표로 구분해서 단어만 나열하세요.
-질문: {q}
-키워드:"""}],
-            max_tokens=80,
+        kw_out = claude_chat(
+            messages=[{"role": "user", "content":
+                f"다음 질문에서 한국 대학 규정 검색에 쓸 핵심 키워드를 추출하세요. "
+                f"동의어·약어·관련 법령 용어도 포함. 쉼표로 구분해 단어만 나열 (5~10개).\n\n"
+                f"질문: {q}\n키워드:"}],
+            max_tokens=120,
+            temperature=0,
         )
-        extra_keywords = [k.strip() for k in expand_resp.choices[0].message.content.split(',') if k.strip()]
-    except:
-        extra_keywords = []
+        extra_keywords = [k.strip() for k in kw_out.split(',') if k.strip()][:10]
+    except Exception:
+        pass
 
     search_text = q + ' ' + ' '.join(extra_keywords)
 
+    # ── 2) Upstage로 질문 임베딩 (4096차원) ────────────────────────
     try:
-        qemb = emb_model.encode(search_text, normalize_embeddings=True).tolist()
+        qemb = upstage_embed_query(search_text)
     except Exception as e:
         raise HTTPException(500, f"Embedding error: {e}")
 
+    # ── 3) DB 벡터 검색: 후보 30개 + 키워드 보강 ──────────────────
     try:
         conn = psycopg2.connect(DB_URL); cur = conn.cursor()
         cur.execute("""
             SELECT id, rule_title, article, department, url, content,
                    1 - (embedding <=> %s::vector) AS score
             FROM rule_chunks ORDER BY embedding <=> %s::vector LIMIT %s;
-        """, (qemb, qemb, TOP_K))
+        """, (qemb, qemb, TOP_K_VECTOR))
         rows = list(cur.fetchall())
 
+        # 키워드 LIKE 보강 (조항명·본문에 키워드 들어간 청크)
         raw_keywords = [w for w in (q + ' ' + ' '.join(extra_keywords)).replace("?","").split() if len(w) >= 3]
         keywords = list(raw_keywords)
         for w in raw_keywords:
@@ -829,27 +1010,48 @@ def query(req: Q):
 
         if keywords:
             existing_ids = {r[0] for r in rows}
-            for kw in keywords:
-                cur.execute("SELECT id,rule_title,article,department,url,content,0.85 AS score FROM rule_chunks WHERE article LIKE %s LIMIT %s", (f"%{kw}%", TOP_K))
+            for kw in keywords[:8]:   # 너무 많이 안 보강 (성능)
+                cur.execute("SELECT id,rule_title,article,department,url,content,0.6 AS score FROM rule_chunks WHERE article LIKE %s LIMIT 5", (f"%{kw}%",))
                 for r in cur.fetchall():
                     if r[0] not in existing_ids: rows.append(r); existing_ids.add(r[0])
-                cur.execute("SELECT id,rule_title,article,department,url,content,0.7 AS score FROM rule_chunks WHERE content LIKE %s LIMIT %s", (f"%{kw}%", TOP_K))
+                cur.execute("SELECT id,rule_title,article,department,url,content,0.5 AS score FROM rule_chunks WHERE content LIKE %s LIMIT 5", (f"%{kw}%",))
                 for r in cur.fetchall():
                     if r[0] not in existing_ids: rows.append(r); existing_ids.add(r[0])
 
-        rows = sorted(rows, key=lambda x: x[6], reverse=True)[:TOP_K]
         conn.close()
     except Exception as e:
         raise HTTPException(500, f"DB error: {e}")
 
-    if not rows or rows[0][6] < 0.15:
+    if not rows:
         return A(answer="해당 내용을 규정에서 찾지 못했습니다. 담당 부서에 문의하세요.", sources=[], found=False)
 
-    # ── 개정 비교 질문 감지 ───────────────────────────────────────
+    # ── 4) Voyage rerank: 후보 중 진짜 관련 깊은 8개만 ────────────
+    docs_for_rerank = [
+        f"[{r[1]} {r[2]}]\n{(r[5] or '')[:1500]}"
+        for r in rows
+    ]
+    try:
+        ranked = voyage_rerank(q, docs_for_rerank, top_k=TOP_K_RERANK)
+        # ranked: [(원본 인덱스, 관련도)] — 관련도 순 정렬됨
+        rerank_filtered = []
+        for orig_idx, score in ranked:
+            row = list(rows[orig_idx])
+            row[6] = float(score)   # 7번째 컬럼(score)을 rerank score로 덮어씀
+            rerank_filtered.append(tuple(row))
+        rows = rerank_filtered
+    except Exception as e:
+        print(f"⚠️ rerank 실패, 임베딩 점수만 사용: {e}")
+        rows = sorted(rows, key=lambda x: x[6], reverse=True)[:TOP_K_RERANK]
+
+    # rerank score가 너무 낮으면 못 찾은 걸로
+    if not rows or rows[0][6] < 0.20:
+        return A(answer="해당 내용을 규정에서 찾지 못했습니다. 담당 부서에 문의하세요.", sources=[], found=False)
+
+    # ── 5) 개정 비교 질문 감지 ────────────────────────────────────
     DIFF_KEYWORDS = [
         "뭐가 바뀌", "무엇이 바뀌", "어떻게 바뀌",
         "개정 내용", "개정사항", "개정 정보", "개정 이력", "개정 비교",
-        "개정일자", "개정날짜", "개정일", "언제 개정", "몇 번 개정",  # ← 추가
+        "개정일자", "개정날짜", "개정일", "언제 개정", "몇 번 개정",
         "변경 내용", "변경사항", "달라진", "수정된", "차이",
         "언제 바뀌", "어떤 부분이", "뭐가 달라"
     ]
@@ -858,51 +1060,137 @@ def query(req: Q):
     diff_ctx = ""
     if is_diff_question and rows:
         from collections import Counter
-        top_title = Counter(r[1] for r in rows).most_common(1)[0][0]
 
-        # 내용 비교 질문인지 날짜 조회 질문인지 구분
+        # 질문에 명시적으로 규정명이 있으면 그걸 우선 사용
+        q_no_space = q.replace(" ", "")
+        candidate_titles = list(set(r[1] for r in rows))
+        best_title = None
+        best_match_len = 0
+        for t in candidate_titles:
+            t_clean = t.replace(" ", "")
+            for i in range(len(t_clean) - 4):
+                for j in range(len(t_clean), i + 4, -1):
+                    chunk = t_clean[i:j]
+                    if len(chunk) >= 5 and chunk in q_no_space and len(chunk) > best_match_len:
+                        best_title = t
+                        best_match_len = len(chunk)
+                        break
+
+        if best_title and best_match_len >= 5:
+            top_title = best_title
+        else:
+            top_title = Counter(r[1] for r in rows).most_common(1)[0][0]
+
         DATE_ONLY_KW = ["개정일자", "개정날짜", "개정일", "언제 개정", "몇 번 개정", "개정 이력", "개정 정보"]
         is_date_only = any(kw in q for kw in DATE_ONLY_KW)
 
         if is_date_only:
             hist = get_revision_history(top_title)
             if hist:
-                diff_ctx = f"\n\n[개정 이력 데이터]\n{hist}"
+                diff_ctx = f"\n\n[개정 이력 데이터 — 이 규정({top_title})의 실제 데이터입니다. 반드시 이 데이터만 사용하세요.]\n{hist}"
         else:
             diff = get_version_diff(top_title, question=q)
             if diff:
-                diff_ctx = f"\n\n[버전별 변경 diff]\n{diff}"
+                diff_ctx = f"\n\n[버전별 변경 diff — 이 규정({top_title})의 데이터입니다.]\n{diff}"
 
-    ctx  = "\n\n".join([f"[조항 {i+1}] {r[1]} {r[2]}\n{r[5]}" for i, r in enumerate(rows)])
+    # ── 6) 부서 매핑 ──────────────────────────────────────────────
+    title_to_dept = _get_title_to_dept_map()
+
+    def _resolve_dept(title: str, db_dept: str) -> str:
+        if db_dept and db_dept.strip():
+            return db_dept.strip()
+        return title_to_dept.get((title or "").strip(), "")
+
+    # ── 7) 참고 컨텍스트 ──────────────────────────────────────────
+    ctx_lines = []
+    for i, r in enumerate(rows):
+        title, article, db_dept, content = r[1], r[2], r[3], r[5]
+        dept = _resolve_dept(title, db_dept)
+        head = f"[조항 {i+1}] {title} {article}"
+        if dept:
+            head += f"  (담당부서: {dept})"
+        ctx_lines.append(f"{head}\n{content}")
+    ctx = "\n\n".join(ctx_lines)
     ctx += diff_ctx
 
-    # ── 멀티턴 히스토리 ───────────────────────────────────────────
-    groq_msgs = [{"role": "system", "content": SYSTEM}]
+    # ── 8) 멀티턴 + Claude 답변 ───────────────────────────────────
+    messages = []
     history = [m for m in req.messages if m.get("role") in ("user", "assistant")]
     prev = history[:-1][-6:] if len(history) > 1 else []
     for m in prev:
-        groq_msgs.append({"role": m["role"], "content": m["content"]})
-    groq_msgs.append({"role": "user", "content": f"[참고 규정 조항]\n{ctx}\n\n[질문]\n{q}"})
+        messages.append({"role": m["role"], "content": m["content"]})
+    messages.append({"role": "user", "content": f"[참고 규정 조항]\n{ctx}\n\n[질문]\n{q}"})
 
     try:
-        resp = groq_client.chat.completions.create(
-            model=GEN_MODEL, messages=groq_msgs, max_tokens=1024,
-        )
-        answer = resp.choices[0].message.content
+        answer = claude_chat(messages=messages, system=SYSTEM, max_tokens=1500, temperature=0.3)
     except Exception as e:
         raise HTTPException(500, f"Generation error: {e}")
 
-    sources = [{"title": r[1], "article": r[2], "department": r[3], "url": r[4], "score": round(r[6], 3)} for r in rows]
+    sources = [{
+        "title": r[1],
+        "article": r[2],
+        "department": _resolve_dept(r[1], r[3]),
+        "url": r[4],
+        "score": round(r[6], 3),
+    } for r in rows]
 
     import re as _re2
     dept = ""; dept_phone = ""; followups = []
 
-    dept_m = _re2.search(r'📞\s*담당부서\s*:\s*([^\n(]+)', answer)
-    if dept_m:
-        dept = dept_m.group(1).strip()
-        for k, v in DEPT_PHONE.items():
-            if k in dept: dept_phone = v; break
-        if not dept_phone: dept_phone = DEFAULT_PHONE
+    # 부서 추출 — AI가 어떤 표기로 적든 잡도록 패턴 확장
+    dept_patterns = [
+        r'📞\s*(?:담당|관련)?\s*부서\s*[:：\-]?\s*([^\n(（]+)',
+        r'(?:^|\n)\s*(?:담당|관련)\s*부서\s*[:：\-]\s*([^\n(（]+)',
+        r'(?:^|\n)\s*부서\s*[:：]\s*([^\n(（]+)',
+    ]
+    for pat in dept_patterns:
+        m = _re2.search(pat, answer)
+        if m:
+            cand = m.group(1).strip().rstrip('.,·-')
+            cand = cand.split(',')[0].split('·')[0].strip()
+            if cand and len(cand) <= 40:
+                dept = cand
+                break
+
+    # source 후보 부서들 — 점수 높은 순
+    source_depts = []
+    for s in sources:
+        d = (s.get("department") or "").strip()
+        if not d:
+            continue
+        # 콤마/구두점으로 묶인 다부서는 첫 부서만
+        d = d.split(',')[0].split('·')[0].split('、')[0].strip()
+        if d and d not in source_depts:
+            source_depts.append(d)
+
+    # AI 응답에 부서가 없으면 source 첫 부서로
+    if not dept and source_depts:
+        dept = source_depts[0]
+
+    # ⚠️ AI가 임의 부서명을 만들었는지 확인 — DEPT_PHONE에도, source에도 없는 부서는 임의 부서로 간주
+    if dept and dept not in DEPT_PHONE:
+        # 부분 매칭으로 사전에 있는지 확인
+        in_dict = any(k in dept or dept in k for k in DEPT_PHONE.keys())
+        # source에 같은 부서가 있는지 확인
+        in_source = any(d == dept or d in dept or dept in d for d in source_depts)
+        if not in_dict and not in_source and source_depts:
+            # AI가 만들어낸 부서명 → source의 실제 부서명으로 교체
+            dept = source_depts[0]
+
+    # 부서 → 전화번호 매핑 (어떤 경우든 dept가 있으면 무조건 번호 매겨줌)
+    if dept:
+        # 정확 매칭 우선
+        if dept in DEPT_PHONE:
+            dept_phone = DEPT_PHONE[dept]
+        else:
+            # 부분 매칭 (긴 키 먼저 시도)
+            for k in sorted(DEPT_PHONE.keys(), key=len, reverse=True):
+                if k in dept or dept in k:
+                    dept_phone = DEPT_PHONE[k]
+                    break
+        # 그래도 못 찾으면 대표번호
+        if not dept_phone:
+            dept_phone = DEFAULT_PHONE
 
     # 연관 질문 추출 — 다양한 형식 모두 매칭
     #   - **관련 질문** / 💡 관련 질문 / 관련 질문: / 연관 질문:
@@ -941,12 +1229,21 @@ def query(req: Q):
         if f not in followups: followups.append(f)
     followups = followups[:4]
 
-    clean_answer = _re2.sub(r'\n*📞[^\n]*담당부서[^\n]*', '', answer)
+    clean_answer = _re2.sub(r'\n*📞[^\n]*?(?:담당|관련)?\s*부서[^\n]*', '', answer)
+    # 이모지 없는 형태도 제거 (관련 부서: 교무처 / 담당부서 - 교무처 등)
+    clean_answer = _re2.sub(r'(?m)^\s*(?:담당|관련)\s*부서\s*[:：\-][^\n]*', '', clean_answer)
+    clean_answer = _re2.sub(r'(?m)^\s*부서\s*[:：][^\n]*', '', clean_answer)
     # AI가 답변에 박은 '(...대표번호 ... 요청)' 같은 안내 문구 제거
     clean_answer = _re2.sub(r'\([^()\n]*대표번호[^()\n]*\)', '', clean_answer)
     clean_answer = _re2.sub(r'\(\s*\d{2,3}-\d{3,4}-\d{4}[^()\n]*\)', '', clean_answer)
     clean_answer = _re2.sub(r'\n*(?:\*\*\s*관련\s*질문\s*\*\*|💡[^\n]*|관련\s*질문\s*[:：]?|연관\s*질문\s*[:：]?)[\s\S]*', '', clean_answer)
     clean_answer = _re2.sub(r'(?m)^\s*\d+\s*[.\)]\s*(제목|본문|출처|담당부서|관련\s*질문)[^\n]*\n?', '', clean_answer)
+    # '**출처**' 또는 '출처:' 라벨 행과 그 아래 출처 목록(- 또는 • 시작)을 모두 제거
+    #   참조 조항 카드로 따로 표시되므로 본문에서 중복 제거
+    clean_answer = _re2.sub(
+        r'(?m)^\s*(?:\*\*\s*)?출처\s*(?:\*\*)?\s*[:：]?\s*\n((?:\s*[-•*][^\n]*\n?)+)',
+        '', clean_answer)
+    clean_answer = _re2.sub(r'(?m)^\s*(?:\*\*\s*)?출처\s*(?:\*\*)?\s*[:：][^\n]*\n?', '', clean_answer)
     clean_answer = _re2.sub(r'(?m)^(제목|본문)\s*[:：]\s*', '', clean_answer)
     clean_answer = _re2.sub(r'(?m)^#{1,6}\s*(.+)$', r'\1', clean_answer)
     clean_answer = _re2.sub(r'\*{1,3}([^*\n]+)\*{1,3}', r'\1', clean_answer)
@@ -958,6 +1255,263 @@ def query(req: Q):
 
     return A(answer=clean_answer, sources=sources, found=True,
              dept=dept, dept_phone=dept_phone, followups=followups)
+
+
+# ── 본문 정리 함수 (스트리밍 끝나고 부르는 후처리) ────────────────
+def _post_process_answer(answer: str) -> tuple[str, list[str]]:
+    """모델 raw 답변 → (clean_answer, followups[])
+    /query 안의 정리 로직을 함수로 추출. /query-stream에서 재사용."""
+    followups: list[str] = []
+    fq_block = _re2.search(
+        r'(?:\*\*\s*관련\s*질문\s*\*\*|💡[^\n]*|관련\s*질문\s*[:：]?|연관\s*질문\s*[:：]?)'
+        r'\s*\n([\s\S]+?)(?=\n\n\*\*|\n\n[가-힣]|\Z)',
+        answer
+    )
+    if fq_block:
+        for line in fq_block.group(1).splitlines():
+            stripped = line.strip()
+            if not stripped: continue
+            text = _re2.sub(r'\*\*', '', stripped)
+            text = _re2.sub(r'^[-*•\d]+[.)]\s*', '', text).strip()
+            text = _re2.sub(r'^Q:\s*', '', text, flags=_re2.IGNORECASE).strip()
+            if _re2.match(r'^A:\s*', text, flags=_re2.IGNORECASE): continue
+            if len(text) < 5 or len(text) > 80: continue
+            if not text.endswith('?') and not text.endswith('?'):
+                text = text + '?'
+            followups.append(text)
+        followups = followups[:4]
+
+    _fb = [
+        "관련 규정 원문은 어디서 볼 수 있나요?",
+        "담당 부서에 직접 문의하려면 어떻게 하나요?",
+        "비슷한 사례에는 어떤 게 있나요?",
+        "예외 조항은 없나요?",
+    ]
+    for f in _fb:
+        if len(followups) >= 4: break
+        if f not in followups: followups.append(f)
+    followups = followups[:4]
+
+    ca = _re2.sub(r'\n*📞[^\n]*?(?:담당|관련)?\s*부서[^\n]*', '', answer)
+    ca = _re2.sub(r'(?m)^\s*(?:담당|관련)\s*부서\s*[:：\-][^\n]*', '', ca)
+    ca = _re2.sub(r'(?m)^\s*부서\s*[:：][^\n]*', '', ca)
+    ca = _re2.sub(r'\([^()\n]*대표번호[^()\n]*\)', '', ca)
+    ca = _re2.sub(r'\(\s*\d{2,3}-\d{3,4}-\d{4}[^()\n]*\)', '', ca)
+    ca = _re2.sub(r'\n*(?:\*\*\s*관련\s*질문\s*\*\*|💡[^\n]*|관련\s*질문\s*[:：]?|연관\s*질문\s*[:：]?)[\s\S]*', '', ca)
+    ca = _re2.sub(r'(?m)^\s*\d+\s*[.\)]\s*(제목|본문|출처|담당부서|관련\s*질문)[^\n]*\n?', '', ca)
+    ca = _re2.sub(
+        r'(?m)^\s*(?:\*\*\s*)?출처\s*(?:\*\*)?\s*[:：]?\s*\n((?:\s*[-•*][^\n]*\n?)+)',
+        '', ca)
+    ca = _re2.sub(r'(?m)^\s*(?:\*\*\s*)?출처\s*(?:\*\*)?\s*[:：][^\n]*\n?', '', ca)
+    ca = _re2.sub(r'(?m)^(제목|본문)\s*[:：]\s*', '', ca)
+    ca = _re2.sub(r'(?m)^#{1,6}\s*(.+)$', r'\1', ca)
+    ca = _re2.sub(r'\*{1,3}([^*\n]+)\*{1,3}', r'\1', ca)
+    ca = _re2.sub(r'_{1,2}([^_\n]+)_{1,2}', r'\1', ca)
+    ca = _re2.sub(r'(?m)^[-*_]{3,}\s*$', '', ca)
+    ca = _re2.sub(r'(?m)^>\s*', '', ca)
+    ca = _re2.sub(r'`+([^`]*)`+', r'\1', ca)
+    ca = _re2.sub(r'\n{3,}', '\n\n', ca).strip()
+
+    return ca, followups
+
+
+# ── POST /query-stream — SSE 스트리밍 답변 ────────────────────────
+@app.post("/query-stream")
+def query_stream(req: Q):
+    """/query와 동일한 검색·rerank를 거치되, Claude 답변을 SSE로 토큰 스트리밍.
+    이벤트 타입:
+      meta  : 검색 결과(sources/dept/dept_phone) 즉시 전송
+      token : Claude가 내보내는 텍스트 청크
+      done  : 최종 정리된 본문 + followups
+      error : 오류 메시지
+    """
+    q = req.question.strip()
+    if not q:
+        raise HTTPException(400, "Empty question")
+
+    def event_gen():
+        import re as _re2_local
+
+        try:
+            # 1) Upstage 임베딩
+            qemb = upstage_embed_query(q)
+
+            # 2) DB 후보 + 키워드 LIKE 보강
+            conn = psycopg2.connect(DB_URL); cur = conn.cursor()
+            cur.execute("""
+                SELECT id, rule_title, article, department, url, content,
+                       1 - (embedding <=> %s::vector) AS score
+                FROM rule_chunks ORDER BY embedding <=> %s::vector LIMIT %s;
+            """, (qemb, qemb, TOP_K_VECTOR))
+            rows = list(cur.fetchall())
+
+            keywords = [w for w in q.replace("?","").split() if len(w) >= 3][:6]
+            if keywords:
+                existing = {r[0] for r in rows}
+                for kw in keywords:
+                    cur.execute("SELECT id,rule_title,article,department,url,content,0.5 AS score FROM rule_chunks WHERE content LIKE %s LIMIT 4", (f"%{kw}%",))
+                    for r in cur.fetchall():
+                        if r[0] not in existing: rows.append(r); existing.add(r[0])
+            conn.close()
+
+            if not rows:
+                yield f'event: done\ndata: {_json.dumps({"answer": "해당 내용을 규정에서 찾지 못했습니다. 담당 부서에 문의하세요.", "sources": [], "found": False, "followups": []}, ensure_ascii=False)}\n\n'
+                return
+
+            # 3) Voyage rerank
+            docs = [f"[{r[1]} {r[2]}]\n{(r[5] or '')[:1500]}" for r in rows]
+            try:
+                ranked = voyage_rerank(q, docs, top_k=TOP_K_RERANK)
+                rerank_filtered = []
+                for orig_idx, score in ranked:
+                    row = list(rows[orig_idx]); row[6] = float(score)
+                    rerank_filtered.append(tuple(row))
+                rows = rerank_filtered
+            except Exception:
+                rows = sorted(rows, key=lambda x: x[6], reverse=True)[:TOP_K_RERANK]
+
+            if not rows or rows[0][6] < 0.20:
+                yield f'event: done\ndata: {_json.dumps({"answer": "해당 내용을 규정에서 찾지 못했습니다. 담당 부서에 문의하세요.", "sources": [], "found": False, "followups": []}, ensure_ascii=False)}\n\n'
+                return
+
+            # 4) 부서 매핑 + sources 메타
+            title_to_dept = _get_title_to_dept_map()
+            def _resolve(title, db_dept):
+                if db_dept and db_dept.strip(): return db_dept.strip()
+                return title_to_dept.get((title or "").strip(), "")
+
+            sources = [{
+                "title": r[1], "article": r[2],
+                "department": _resolve(r[1], r[3]),
+                "url": r[4], "score": round(r[6], 3),
+            } for r in rows]
+
+            # 부서 추정 — 다부서 분리 + 최빈값
+            def _split_depts(raw):
+                """'A, B · C' → ['A', 'B', 'C']"""
+                if not raw: return []
+                out = []
+                for piece in _re2_local.split(r'[,·、/]+', raw):
+                    p = piece.strip().rstrip('.,·-')
+                    if p and len(p) <= 40 and p not in out:
+                        out.append(p)
+                return out
+
+            from collections import Counter
+            all_dept_candidates = []
+            for s in sources:
+                for d in _split_depts(s["department"]):
+                    all_dept_candidates.append(d)
+
+            # 상위 3개 source(가장 관련도 높음)의 부서에 가중치 2배
+            weighted = []
+            for i, s in enumerate(sources[:3]):
+                for d in _split_depts(s["department"]):
+                    weighted.extend([d, d])   # 가중치 2배
+            weighted.extend(all_dept_candidates)
+
+            dept = ""; dept_phone = ""
+            if weighted:
+                # 최빈값 (동률이면 위 source의 부서 우선)
+                most_common = Counter(weighted).most_common()
+                # DEPT_PHONE에 존재하는 부서 우선
+                for cand, _ in most_common:
+                    if cand in DEPT_PHONE:
+                        dept = cand
+                        dept_phone = DEPT_PHONE[cand]
+                        break
+                # 못 찾으면 부분 매칭으로
+                if not dept:
+                    for cand, _ in most_common:
+                        for k in sorted(DEPT_PHONE.keys(), key=len, reverse=True):
+                            if k in cand or cand in k:
+                                dept = cand
+                                dept_phone = DEPT_PHONE[k]
+                                break
+                        if dept: break
+                # 그래도 못 찾으면 1순위 candidate + 대표번호
+                if not dept:
+                    dept = most_common[0][0]
+                    dept_phone = DEFAULT_PHONE
+
+            # 메타 즉시 전송 (참조 카드/부서 카드를 답변 시작 전부터 노출 가능)
+            meta = {"sources": sources, "dept": dept, "dept_phone": dept_phone, "found": True}
+            yield f'event: meta\ndata: {_json.dumps(meta, ensure_ascii=False)}\n\n'
+
+            # 5) 컨텍스트 구성
+            ctx_lines = []
+            for i, r in enumerate(rows):
+                head = f"[조항 {i+1}] {r[1]} {r[2]}"
+                d = _resolve(r[1], r[3])
+                if d: head += f"  (담당부서: {d})"
+                ctx_lines.append(f"{head}\n{r[5]}")
+            ctx = "\n\n".join(ctx_lines)
+
+            # 6) 메시지 구성
+            messages = []
+            history = [m for m in req.messages if m.get("role") in ("user", "assistant")]
+            prev = history[:-1][-6:] if len(history) > 1 else []
+            for m in prev:
+                messages.append({"role": m["role"], "content": m["content"]})
+            messages.append({"role": "user", "content": f"[참고 규정 조항]\n{ctx}\n\n[질문]\n{q}"})
+
+            # 7) Claude 스트리밍 — 토큰 받자마자 즉시 전송
+            buffer = []
+            try:
+                for chunk in claude_stream(messages=messages, system=SYSTEM,
+                                           max_tokens=1500, temperature=0.3):
+                    buffer.append(chunk)
+                    yield f'event: token\ndata: {_json.dumps({"t": chunk}, ensure_ascii=False)}\n\n'
+            except Exception as e:
+                yield f'event: error\ndata: {_json.dumps({"error": f"Claude 스트리밍 실패: {e}"}, ensure_ascii=False)}\n\n'
+                return
+
+            # 8) 정리 + 최종 전송
+            raw_answer = "".join(buffer)
+            clean_answer, followups = _post_process_answer(raw_answer)
+
+            # 부서 보정 — AI 답변 raw 텍스트에 명시된 부서명 우선
+            #   AI가 "📞 담당부서: 글로컬상생홍보팀" 식으로 답하면 그걸 신뢰
+            ai_dept = ""
+            for pat in [
+                r'📞\s*(?:담당|관련)?\s*부서\s*[:：\-]?\s*([^\n(（]+)',
+                r'(?:^|\n)\s*(?:담당|관련)\s*부서\s*[:：\-]\s*([^\n(（]+)',
+            ]:
+                mm = _re2_local.search(pat, raw_answer)
+                if mm:
+                    cand = mm.group(1).strip().rstrip('.,·-')
+                    cand = cand.split(',')[0].split('·')[0].strip()
+                    if cand and len(cand) <= 40:
+                        ai_dept = cand
+                        break
+
+            # AI가 적은 부서가 사전에 있고 다르면 그걸 사용 (단, source에 있는 부서여야 안전)
+            if ai_dept and ai_dept != dept:
+                # source의 모든 부서 후보들 (다부서 분리 포함)
+                all_src_depts = set()
+                for s in sources:
+                    for d in _split_depts(s["department"]):
+                        all_src_depts.add(d)
+                # ai_dept가 source에도 있으면 신뢰
+                if ai_dept in all_src_depts or any(ai_dept in s or s in ai_dept for s in all_src_depts):
+                    dept = ai_dept
+                    if dept in DEPT_PHONE:
+                        dept_phone = DEPT_PHONE[dept]
+                    else:
+                        dept_phone = DEFAULT_PHONE
+                        for k in sorted(DEPT_PHONE.keys(), key=len, reverse=True):
+                            if k in dept or dept in k:
+                                dept_phone = DEPT_PHONE[k]; break
+
+            done = {"answer": clean_answer, "followups": followups,
+                    "sources": sources, "dept": dept, "dept_phone": dept_phone,
+                    "found": True}
+            yield f'event: done\ndata: {_json.dumps(done, ensure_ascii=False)}\n\n'
+        except Exception as e:
+            yield f'event: error\ndata: {_json.dumps({"error": str(e)}, ensure_ascii=False)}\n\n'
+
+    return StreamingResponse(event_gen(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
 # ── 규정 목록 ─────────────────────────────────────────────────────
@@ -978,7 +1532,16 @@ def get_rules():
                     if not raw_code:
                         code_m  = _re.search(r'(\d+)-(\d+)-(\d+)', r.get("content", ""))
                         raw_code = f"{code_m.group(1)}-{code_m.group(2)}-{code_m.group(3)}" if code_m else ""
-                    chap_num  = raw_code.split("-")[0] if raw_code else "0"
+
+                    # 편 번호 결정 우선순위:
+                    # ① chapter 필드 (crawler가 트리에서 가져온 정확한 값)
+                    # ② raw_code의 첫 숫자
+                    chapter_val = r.get("chapter", 0)
+                    if chapter_val and 1 <= int(chapter_val) <= 8:
+                        chap_num = str(int(chapter_val))
+                    else:
+                        chap_num = raw_code.split("-")[0] if raw_code else "0"
+
                     chap_name = CHAP_MAP.get(chap_num, "기타")
                     chap_key  = f"제{chap_num}편 {chap_name}" if chap_num != "0" else "기타"
                     chapters[chap_key].append({
@@ -1163,7 +1726,7 @@ def _reindex_rule_chunks(seq, title: str, dept: str, url: str, content: str) -> 
     if not chunks:
         raise HTTPException(400, "개정 내용에서 청크를 만들 수 없습니다.")
     try:
-        embeddings = emb_model.encode(chunks, normalize_embeddings=True).tolist()
+        embeddings = upstage_embed_passage(chunks)
     except Exception as e:
         raise HTTPException(500, f"임베딩 실패: {e}")
 
@@ -1352,8 +1915,7 @@ def _restore_one(seq, json_item: dict, db_chunks: list, rules: list) -> bool:
               AND (url IS NULL OR url NOT LIKE 'upload://%%')
         """, (str(seq),))
         for c in db_chunks:
-            emb = emb_model.encode([c["content"]],
-                                   normalize_embeddings=True).tolist()[0]
+            emb = upstage_embed_passage([c["content"]])[0]
             cur.execute("""
                 INSERT INTO rule_chunks (id,rule_title,seq,article,department,url,content,embedding)
                 VALUES (%s,%s,%s,%s,%s,%s,%s,%s::vector)
@@ -1409,8 +1971,7 @@ def revision_rollback(backup_id: str = Form(...), payload: dict = Depends(verify
                       AND (url IS NULL OR url NOT LIKE 'upload://%%')
                 """, (str(seq),))
                 for c in backup.get("db_chunks", []):
-                    emb = emb_model.encode([c["content"]],
-                                           normalize_embeddings=True).tolist()[0]
+                    emb = upstage_embed_passage([c["content"]])[0]
                     cur.execute("""
                         INSERT INTO rule_chunks (id,rule_title,seq,article,department,url,content,embedding)
                         VALUES (%s,%s,%s,%s,%s,%s,%s,%s::vector)
@@ -1771,13 +2332,12 @@ async def extract_article_revision(
 - 조 머리글(제 N 조 (제목))부터 그 조항 본문 끝까지 그대로 출력하라.
 - 문서에서 해당 조항의 개정안을 찾을 수 없으면 정확히 'NOT_FOUND' 한 단어만 출력하라.
 - 설명·머리말 없이 추출한 본문만 출력하라."""
-        resp = groq_client.chat.completions.create(
-            model=GEN_MODEL,
+        ai_text = claude_chat(
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=1200,
+            max_tokens=1500,
             temperature=0,
         )
-        ai_text = (resp.choices[0].message.content or "").strip()
+        ai_text = (ai_text or "").strip()
         # 코드블록 마크다운 제거
         ai_text = _re.sub(r'^```[a-zA-Z]*\s*', '', ai_text)
         ai_text = _re.sub(r'\s*```$', '', ai_text).strip()
@@ -2025,15 +2585,117 @@ def bulk_replace_apply(req: BulkReplaceQ, payload: dict = Depends(verify_token))
 # AI 형식/표현 검사 — 규정 본문이 한성대 표준 형식에 맞는지 검토
 # ══════════════════════════════════════════════════════════════════
 
-# 한성대 규정 표준 형식 (크롤링한 원문에서 파악한 규칙)
-_HSU_RULE_FORMAT = """[한성대학교 규정 표준 형식]
-- 조: '제 1 조 (목적)' — '제'와 숫자와 '조' 사이를 띄우고, 괄호 안에 조 제목.
-- 항: 원문자 ① ② ③ 사용.
-- 호: 숫자+마침표 '1.' '2.' '3.' 사용. ('가.' '나.' 같은 한글 기호를 호에 쓰지 않음)
-- 목: 한글+마침표 '가.' '나.' '다.' 사용. (호 아래 하위 항목일 때만)
-- 개정일: 조문 끝에 '(2025. 9. 23.)' 형태로 표기.
-- 부칙: '부 칙' 표기 후 '(시행일) ...' 형태.
-- 문장은 규정체(간결한 평서문, '~한다' '~하여야 한다')로 작성."""
+# 한성대 규정 표준 형식 (크롤링한 원문 1,600여 버전에서 파악한 규칙)
+_HSU_RULE_FORMAT = """[한성대학교 규정 표준 형식 — 반드시 이 규칙을 따라야 함]
+
+■ 조 (條)
+  · 형식: '제 N 조 (제목)' — '제' '숫자' '조' 사이를 반드시 띄움, 괄호 안에 조 제목
+  · 예) '제 1 조 (목적)', '제 12 조 (재택근무)', '제 30 조의2 (관련 규정)'
+  · 잘못된 예) '제1조(목적)' '제 1조 (목적)' 'Article 1' — 모두 형식 위반
+
+■ 항 (項)
+  · 형식: 원문자 ① ② ③ ④ ⑤ ... 만 사용 (반드시 동그라미 숫자)
+  · 잘못된 예) '1)' '(1)' '제1항' — 모두 형식 위반
+
+■ 호 (號)
+  · 형식: 아라비아 숫자 + 마침표 '1.' '2.' '3.' ...
+  · 잘못된 예) '가.' '나.' '①' '(1)' '1)' — 호 자리에 쓰면 모두 형식 위반
+
+■ 목 (目)
+  · 형식: 한글 가나다 + 마침표 '가.' '나.' '다.' ...
+  · 호의 하위 항목일 때만 사용. 호 위치에 쓰지 말 것.
+
+■ 개정일 표기
+  · 형식: '(YYYY. M. D. 개정)' 또는 본문 끝에 '(YYYY. M. D.)'
+  · 예) '(2024. 3. 15. 개정)', '(2025. 9. 23.)'
+  · 잘못된 예) '(2024-03-15)' '(2024년 3월 15일)' '2024.3.15' — 형식 위반
+
+■ 부칙
+  · 본문과 분리해 '부 칙' (한 글자씩 띄어쓰기) 표기
+  · 아래로 '(시행일) 이 규정은 YYYY년 M월 D일부터 시행한다.' 형식
+
+■ 문장 표현 (규정체)
+  · 평서문, '~한다' '~하여야 한다' '~할 수 있다' 형태
+  · 금지: '~해요' '~합니다' '~인 것 같다' '~로 사료된다' 같은 구어/추측 표현
+  · 능동·간결 — 한 문장 한 의도. 모호한 표현(예: '적절히' '필요시' '가급적')은 가급적 회피.
+
+■ 띄어쓰기 (한성대 표기 관례)
+  · '제 N 조', '제 N 항' — 띄움
+  · 학칙/규정명 인용 시 「 」 (낫표) 사용. 예) 「한성대학교 학칙」 제 24 조
+
+■ 기타
+  · 영문·한자 병기는 한글(英文/漢字) 형태로 괄호 안에
+  · 표·서식 인용: '별표 1', '별지 제1호 서식' 형태
+  · 신구조문대비표는 '[현 행]' / '[개 정 안]' 표기
+"""
+
+
+# 형식 검사용 샘플 캐시 — 서버 시작 시 1회 로드 (잘 정돈된 한성대 규정 본문 일부)
+_FORMAT_SAMPLE_CACHE = {"text": "", "loaded": False}
+
+def _load_format_samples() -> str:
+    """history.json에서 형식이 깔끔한 규정 본문 일부를 샘플로 추출.
+    프롬프트에 직접 첨부할 용도. 토큰 절약 위해 4,500자로 제한."""
+    if _FORMAT_SAMPLE_CACHE["loaded"]:
+        return _FORMAT_SAMPLE_CACHE["text"]
+
+    # 우선순위: 학칙 → 학사운영규정 → 등록금규정 → 그 외 첫 몇 편
+    priority_keywords = ["학칙", "학사운영", "등록금", "장학"]
+    samples = []
+    total_len = 0
+    LIMIT = 4500
+
+    try:
+        hist = _load_history_json()
+        # 우선순위 규정부터 모음
+        ordered = []
+        for kw in priority_keywords:
+            for r in hist:
+                title = r.get("title", "")
+                if kw in title and r not in ordered:
+                    ordered.append(r)
+        # 나머지로 채움 (최대 8편까지 검토)
+        for r in hist:
+            if r not in ordered:
+                ordered.append(r)
+            if len(ordered) >= 8:
+                break
+
+        for r in ordered:
+            latest = _get_latest_version(r)
+            if not latest:
+                continue
+            content = (latest.get("content") or "").strip()
+            if not content or len(content) < 200:
+                continue
+            # 조 시작부터 일부만 (보통 제1조~제3조까지)
+            # '제 N 조' 패턴 위치 찾고 처음 3개 조까지
+            m = list(_re.finditer(r'제\s*\d+\s*조\s*\(', content))
+            if len(m) >= 2:
+                end_pos = m[2].start() if len(m) >= 3 else len(content)
+                excerpt = content[m[0].start():end_pos].strip()
+            else:
+                excerpt = content[:1500]
+
+            if len(excerpt) < 100:
+                continue
+            # 너무 길면 자름
+            excerpt = excerpt[:1500]
+
+            block = f"━━ 「{r.get('title', '')}」 본문 발췌 ━━\n{excerpt}"
+            if total_len + len(block) > LIMIT:
+                break
+            samples.append(block)
+            total_len += len(block)
+            if len(samples) >= 3:
+                break
+    except Exception:
+        pass
+
+    text = "\n\n".join(samples) if samples else ""
+    _FORMAT_SAMPLE_CACHE["text"] = text
+    _FORMAT_SAMPLE_CACHE["loaded"] = True
+    return text
 
 
 class FormatCheckQ(BaseModel):
@@ -2055,35 +2717,54 @@ def format_check(req: FormatCheckQ, payload: dict = Depends(verify_token)):
         raise HTTPException(400, "검사할 내용이 너무 짧습니다.")
 
     doc = text[:5000]   # 토큰 보호
-    prompt = f"""너는 한성대학교 규정 편집을 돕는 검토 도우미다.
-아래 규정 본문을 검토해, 표준 형식이나 표현에 어긋난 부분을 찾아라.
+    sample_block = _load_format_samples()
+    sample_section = f"""\n[표준 샘플 — 한성대학교 실제 규정 본문]
+아래는 한성대학교의 실제 규정에서 가져온 표본이다.
+검사 대상 본문이 이 형식과 어긋나는 부분을 모두 찾아라.
+
+{sample_block}\n""" if sample_block else ""
+
+    prompt = f"""너는 한성대학교 규정 편집을 돕는 엄격한 형식 검토 도우미다.
+아래 [표준 형식 규칙]과 [표준 샘플]을 기준으로, [검사 대상 본문]에서 형식·표현 위반을 모두 찾아라.
 
 {_HSU_RULE_FORMAT}
-
-[검토할 본문]
+{sample_section}
+[검사 대상 본문]
 {doc}
 
-[지시]
-- 형식 오류(항/호/목 기호, 띄어쓰기, 개정일 표기 등)와 표현 제안(문장이 규정체가 아닌 경우 등)을 찾아라.
-- 각 지적은 본문에 '실제로 있는 짧은 원문 조각'을 그대로 인용해야 한다 (찾아서 하이라이트할 것이므로 정확히).
-- 문제가 없으면 빈 배열을 반환하라. 억지로 지적하지 마라.
-- 표현 제안은 신중히, 명백히 어색한 경우만.
-- 출력은 JSON 배열만. 설명·머리말 없이. 형식:
+[지시 — 반드시 지킬 것]
+1. 위 [표준 샘플]의 표기 방식과 다른 부분은 모두 형식 위반으로 본다.
+   예: 샘플은 '제 1 조 (목적)'인데 검사 본문이 '제1조(목적)'이면 → 형식 오류.
+   예: 샘플은 항이 '①'인데 검사 본문이 '1)'이면 → 형식 오류.
+2. 각 지적은 '본문에 실제로 있는 짧은 원문 조각'을 그대로 인용해야 한다.
+   - 인용은 5~40자 사이. 본문에 존재하지 않는 인용은 절대 만들지 마라.
+   - 인용 부분에 ... 같은 생략 표시 금지. 정확한 문자열 그대로.
+3. 두루뭉술한 advice 금지:
+   - 나쁜 예: "형식이 어색합니다", "수정이 필요합니다", "표현이 부적절합니다"
+   - 좋은 예: "'제1조(목적)' → '제 1 조 (목적)'처럼 '제·숫자·조' 사이를 띄우고 괄호 앞도 띄어 씁니다."
+   - advice는 어떻게 고치는지 **구체적인 수정안**을 포함해야 한다.
+4. 표현(expression)은 명백한 구어체·추측·중복일 때만 지적. 사소한 문체 차이는 넘어가라.
+5. 형식 오류(format) 우선. 항·호·목·개정일 표기·띄어쓰기·괄호 사용을 가장 깐깐히 본다.
+6. 위반이 없으면 빈 배열 []. 억지로 만들지 마라.
+7. 출력은 JSON 배열만. 설명·머리말·코드 블록 없이.
+
+형식:
 [
-  {{"snippet": "가. 첫째 항목", "kind": "format", "advice": "호는 '가.'가 아니라 '1.' '2.' 순으로 씁니다."}},
-  {{"snippet": "제1조(목적)", "kind": "format", "advice": "'제 1 조 (목적)'처럼 띄어 씁니다."}}
+  {{"snippet": "제1조(목적)", "kind": "format", "advice": "'제 1 조 (목적)'처럼 '제·숫자·조' 사이를 띄우고 괄호 앞도 띄어 씁니다."}},
+  {{"snippet": "가. 학생의 신분", "kind": "format", "advice": "호는 '1.' '2.' 순으로 씁니다. '가. 나. 다.'는 호 아래 목에서만 사용합니다."}},
+  {{"snippet": "필요한 것 같다", "kind": "expression", "advice": "규정체로 '~한다' 또는 '~하여야 한다'를 씁니다. 추측 표현 '~것 같다'는 부적절합니다."}}
 ]
-- kind 는 "format" 또는 "expression" 둘 중 하나.
-- 지적은 최대 15개까지만."""
+
+- kind: "format" 또는 "expression" 둘 중 하나
+- 지적은 최대 20개"""
 
     try:
-        resp = groq_client.chat.completions.create(
-            model=GEN_MODEL,
+        raw = claude_chat(
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=1500,
+            max_tokens=2500,
             temperature=0,
         )
-        raw = (resp.choices[0].message.content or "").strip()
+        raw = (raw or "").strip()
         raw = _re.sub(r'^```[a-zA-Z]*\s*', '', raw)
         raw = _re.sub(r'\s*```$', '', raw).strip()
         # JSON 배열만 추출
@@ -2096,7 +2777,15 @@ def format_check(req: FormatCheckQ, payload: dict = Depends(verify_token)):
     except Exception as e:
         return {"issues": [], "error": f"AI 검토 실패: {e}", "text": text}
 
-    # 검증: snippet 이 실제 본문에 있는 것만 통과
+    # ── 후처리 ─────────────────────────────────────────────────
+    # 1) snippet 이 실제 본문에 있어야 함
+    # 2) advice 가 너무 짧거나 두루뭉술하면 버림
+    # 3) 중복 snippet 제거
+    _VAGUE_PATTERNS = [
+        "필요합니다", "필요해", "어색합니다", "어색해",
+        "수정이 필요", "검토가 필요", "확인이 필요",
+        "부적절합니다.", "적절하지 않", "맞지 않",
+    ]
     cleaned = []
     for it in issues:
         if not isinstance(it, dict):
@@ -2110,6 +2799,16 @@ def format_check(req: FormatCheckQ, payload: dict = Depends(verify_token)):
             continue   # 본문에 없는 인용은 버림 (AI 환각 방지)
         if kind not in ("format", "expression"):
             kind = "format"
+        # advice가 너무 짧으면 버림 (구체적 수정안 강제)
+        if len(advice) < 15:
+            continue
+        # 두루뭉술 advice — 구체적 수정안(→, ' 같은 인용 부호, '~로') 없으면 버림
+        has_concrete = ("→" in advice or "'" in advice or "\"" in advice
+                        or "처럼" in advice or "씁니다" in advice
+                        or "표기" in advice or "사용" in advice)
+        is_vague_only = any(p in advice for p in _VAGUE_PATTERNS) and not has_concrete
+        if is_vague_only:
+            continue
         cleaned.append({"snippet": snip, "kind": kind, "advice": advice})
 
     # 중복 snippet 제거

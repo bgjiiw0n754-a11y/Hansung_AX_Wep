@@ -70,7 +70,7 @@ OUTPUT = "hansung_rules_history.json"
 #     2) F12 → Network 탭 → 아무 요청 클릭 → Request Headers의 'cookie' 값 복사
 #     3) 아래 COOKIE_STRING 에 통째로 붙여넣기
 # ══════════════════════════════════════════════════════════════════
-COOKIE_STRING = "_ga_NL5KXSTFMR=GS2.1.s1755828457$o1$g1$t1755828471$j46$l0$h0; _ga_H9TXVM0LGL=GS2.1.s1778759247$o7$g1$t1778759502$j60$l0$h0; _ga_K9JR8L935E=GS2.1.s1779082447$o2$g0$t1779082450$j57$l0$h0; _ga=GA1.1.1100685177.1755828368; JSESSIONID=41D751DFCD764834E7F9E3451FBA019E; _ga_2G1Q8E8S12=GS2.1.s1779210254$o97$g1$t1779211595$j60$l0$h0; TS01e66883=014902a0e1f86b75834dd7ecbee9d19d25ed78fe4c21b0bdffe96e823e731ffa0a47f732ad233a7e5e7e743484453e8c9dcf776306"
+COOKIE_STRING = "_ga_NL5KXSTFMR=GS2.1.s1755828457$o1$g1$t1755828471$j46$l0$h0; _ga_H9TXVM0LGL=GS2.1.s1778759247$o7$g1$t1778759502$j60$l0$h0; _ga_K9JR8L935E=GS2.1.s1779082447$o2$g0$t1779082450$j57$l0$h0; _ga=GA1.1.1100685177.1755828368; _ga_2G1Q8E8S12=GS2.1.s1779255503$o103$g1$t1779255540$j23$l0$h0; JSESSIONID=B42972E99683F0C9AEA79D84A1C28E2D; TS01e66883=014902a0e1588d1810568cae793fb5c706cce73f0317aadcc334f2745540c160894df7b6ed39ab9c847d323c0aba7c0a1b946a25e0"
 
 HEADERS = {
     "User-Agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/148.0.0.0 Safari/537.36",
@@ -82,6 +82,133 @@ HEADERS = {
 
 session = requests.Session()
 session.headers.update(HEADERS)
+
+
+# ─────────────────────────────────────────────────────────────────
+# 편(編) 분류 — 사이트 좌측 트리에서 SEQ → 편 번호 매핑
+# ─────────────────────────────────────────────────────────────────
+CHAPTERS = {
+    1: "제1편 학교법인",
+    2: "제2편 학칙",
+    3: "제3편 학사행정",
+    4: "제4편 부속기관",
+    5: "제5편 부설기관",
+    6: "제6편 위원회",
+    7: "제7편 산학협력단",
+    8: "제8편 학생군사교육단",
+}
+
+_seq_to_chapter_cache: dict[int, int] | None = None
+
+
+def _fetch_left_tree_html() -> str:
+    """좌측 트리 HTML — lawTree.do?LAWGROUP=1 이 zNodes JSON을 포함한 HTML 반환."""
+    url = f"{BASE}/lmxsrv/law/lawTree.do?LAWGROUP=1"
+    try:
+        r = session.get(url, timeout=20)
+        if r.status_code == 200 and "zNodes" in r.text:
+            return r.text
+    except Exception as e:
+        print(f"  트리 요청 실패: {e}")
+    return ""
+
+
+def _parse_tree_to_mapping(html: str) -> dict[int, int]:
+    """lawTree.do HTML 안의 'var zNodes = [...]' JSON을 파싱해 {SEQ: 편번호}.
+
+    트리 구조:
+      - 최상위 노드 "규정" (id=1)
+      - 그 자식: "제N편 ..." (id=2~17 등, folder="1")
+      - 그 자식: "제N장 ..." (folder="1") 또는 규정 (folder="0", id=SEQ)
+      - 규정은 가장 가까운 조상 "제N편"으로 귀속
+    """
+    # 'var zNodes = [...]' 추출
+    m = re.search(r'var\s+zNodes\s*=\s*(\[[\s\S]*?\])\s*;', html)
+    if not m:
+        return {}
+
+    try:
+        nodes = json.loads(m.group(1))
+    except json.JSONDecodeError as e:
+        print(f"  zNodes JSON 파싱 실패: {e}")
+        return {}
+
+    # id → node 매핑
+    by_id = {n.get("id"): n for n in nodes if "id" in n}
+
+    # 편(編) 노드 식별: name이 "제N편 ..." 패턴 + folder="1"
+    chapter_id_to_num: dict[int, int] = {}
+    for n in nodes:
+        if n.get("folder") != "1":
+            continue
+        name = n.get("name", "") or ""
+        cm = re.match(r'^제\s*([1-8])\s*편', name)
+        if cm:
+            chapter_id_to_num[n["id"]] = int(cm.group(1))
+
+    if not chapter_id_to_num:
+        return {}
+
+    # 각 노드의 조상을 거슬러 올라가 어느 편에 속하는지 찾기
+    def find_chapter_for(node_id: int, visited: set | None = None) -> int | None:
+        if visited is None:
+            visited = set()
+        if node_id in visited or node_id not in by_id:
+            return None
+        visited.add(node_id)
+        if node_id in chapter_id_to_num:
+            return chapter_id_to_num[node_id]
+        parent_id = by_id[node_id].get("pId")
+        if parent_id is None or parent_id == 0:
+            return None
+        return find_chapter_for(parent_id, visited)
+
+    # 규정 노드(folder="0")만 추려 매핑
+    mapping: dict[int, int] = {}
+    for n in nodes:
+        if n.get("folder") == "0":
+            seq = n.get("id")
+            if not seq:
+                continue
+            ch = find_chapter_for(seq)
+            if ch:
+                mapping[int(seq)] = ch
+    return mapping
+
+
+def get_seq_to_chapter_map() -> dict[int, int]:
+    """SEQ → 편번호 매핑을 한 번 가져와 캐시."""
+    global _seq_to_chapter_cache
+    if _seq_to_chapter_cache is not None:
+        return _seq_to_chapter_cache
+
+    print("\n좌측 트리(lawTree.do?LAWGROUP=1)에서 편 분류 가져오는 중...")
+    tree_html = _fetch_left_tree_html()
+    if not tree_html:
+        print("  ❌ lawTree.do 요청 실패. 쿠키 만료 가능성.")
+        _seq_to_chapter_cache = {}
+        return {}
+
+    mapping = _parse_tree_to_mapping(tree_html)
+    print(f"  파싱 결과: {len(mapping)}편 매핑")
+
+    _seq_to_chapter_cache = mapping
+
+    # 편별 통계
+    from collections import Counter
+    cnt = Counter(mapping.values())
+    for ch in range(1, 9):
+        print(f"    {CHAPTERS[ch]:30s} {cnt.get(ch, 0):4d}편")
+
+    # 디버그용 파일 저장
+    try:
+        with open("seq_to_chapter.json", "w", encoding="utf-8") as f:
+            json.dump({str(k): v for k, v in mapping.items()},
+                      f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+    return mapping
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -160,7 +287,30 @@ def extract_hwpx(data: bytes) -> str:
     except Exception as e:
         print(f"    ⚠️  HWPX: {e}"); return ""
 
+_hwp5txt_checked = False
+_hwp5txt_available = False
+
+def _check_hwp5txt():
+    global _hwp5txt_checked, _hwp5txt_available
+    if _hwp5txt_checked:
+        return _hwp5txt_available
+    _hwp5txt_checked = True
+    try:
+        res = subprocess.run(["hwp5txt", "--help"], capture_output=True, timeout=5)
+        _hwp5txt_available = (res.returncode == 0)
+    except Exception:
+        _hwp5txt_available = False
+    if not _hwp5txt_available:
+        print("\n  ⚠️  hwp5txt 명령을 찾을 수 없습니다 (HWP 첨부 추출 불가)")
+        print("      pip install pyhwp  또는  conda install -c conda-forge pyhwp")
+        print("      설치 후 'hwp5txt --help' 동작 확인 필요")
+        print("      (HWPX/PDF/DOCX 첨부는 정상 처리됨)\n")
+    return _hwp5txt_available
+
+
 def extract_hwp(data: bytes) -> str:
+    if not _check_hwp5txt():
+        return ""
     try:
         with tempfile.NamedTemporaryFile(suffix=".hwp", delete=False) as f:
             f.write(data); tmp = f.name
@@ -507,6 +657,22 @@ def main():
         done_seq_set = {r["seq"] for r in results}
         print(f"기존 {len(results)}개 규정 로드, 이어서 진행\n")
 
+    # ── 편(編) 분류 매핑을 미리 로드 (한 번에) ──
+    seq_to_chapter = get_seq_to_chapter_map()
+
+    # 이미 결과에 들어있는 규정도 편 분류 비어있으면 채워줌 (재실행 시 자동 보완)
+    fixed_existing = 0
+    for r in results:
+        if not r.get("category"):
+            seq = int(r.get("seq", -1))
+            ch = seq_to_chapter.get(seq)
+            if ch:
+                r["category"] = CHAPTERS[ch]
+                r["chapter"]  = ch
+                fixed_existing += 1
+    if fixed_existing:
+        print(f"\n기존 결과 {fixed_existing}편의 편 분류 보완\n")
+
     # SEQ 1~1500 순회
     for seq in range(1, 1501):
         if seq in done_seq_set:
@@ -520,11 +686,17 @@ def main():
         ver_count = len(histories)
         print(f"\n▶ SEQ={seq}  ({ver_count}개 버전)")
 
+        # 편 분류
+        ch = seq_to_chapter.get(seq)
+        category_label = CHAPTERS[ch] if ch else ""
+
         # 규정 객체 초기화
         regulation = {
             "seq":          seq,
             "title":        "",
             "department":   "",
+            "category":     category_label,   # "제N편 ..."
+            "chapter":      ch or 0,           # 편 번호 1~8 (없으면 0)
             "url_latest":   "",
             "version_count": ver_count,
             "versions":     [],

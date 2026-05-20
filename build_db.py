@@ -1,9 +1,9 @@
-import json, re, os
+import json, re, os, time, sys
 from pathlib import Path
 from dotenv import load_dotenv
 import psycopg2
 from psycopg2.extras import execute_values
-from sentence_transformers import SentenceTransformer
+import requests
 
 load_dotenv()
 
@@ -11,14 +11,46 @@ DB_URL = os.getenv("DATABASE_URL")
 if not DB_URL:
     raise RuntimeError("❌ DATABASE_URL이 .env에 설정되지 않았습니다.")
 
-INPUT     = "hansung_rules_history.json"
-EMB_MODEL = "paraphrase-multilingual-MiniLM-L12-v2"
-BATCH     = 64
-DIM       = 384
+UPSTAGE_API_KEY = os.getenv("UPSTAGE_API_KEY")
+if not UPSTAGE_API_KEY:
+    raise RuntimeError("❌ UPSTAGE_API_KEY가 .env에 설정되지 않았습니다.")
 
-print(f"모델 로딩 중: {EMB_MODEL}")
-model = SentenceTransformer(EMB_MODEL)
-print("모델 로딩 완료!")
+INPUT     = "hansung_rules_history.json"
+# Upstage solar-embedding-1-large: 4096차원, 한국어 특화
+EMB_MODEL = "solar-embedding-1-large-passage"   # 적재용: 문서 임베딩
+EMB_URL   = "https://api.upstage.ai/v1/solar/embeddings"
+BATCH     = 32           # Upstage 요청당 적정 배치 크기 (토큰 한계 고려)
+DIM       = 4096
+SLEEP_MS  = 50           # rate-limit 회피 (요청 사이 50ms 대기)
+
+print(f"Upstage 임베딩 사용: {EMB_MODEL} ({DIM}차원)")
+
+
+def embed_batch(texts: list[str], retries: int = 3) -> list[list[float]]:
+    """Upstage embeddings API 호출. 재시도 포함."""
+    headers = {
+        "Authorization": f"Bearer {UPSTAGE_API_KEY}",
+        "Content-Type": "application/json",
+    }
+    payload = {"model": EMB_MODEL, "input": texts}
+    last_err = None
+    for attempt in range(retries):
+        try:
+            r = requests.post(EMB_URL, headers=headers, json=payload, timeout=60)
+            if r.status_code == 429:
+                # rate limit — exponential backoff
+                wait = (attempt + 1) * 2
+                print(f"    rate-limit, {wait}초 대기...")
+                time.sleep(wait)
+                continue
+            r.raise_for_status()
+            data = r.json()
+            return [d["embedding"] for d in data["data"]]
+        except Exception as e:
+            last_err = e
+            print(f"    임베딩 오류 (시도 {attempt+1}): {e}")
+            time.sleep((attempt + 1) * 2)
+    raise RuntimeError(f"임베딩 실패 (3회 재시도): {last_err}")
 
 
 def chunk_rule(regulation: dict) -> list[dict]:
@@ -130,7 +162,19 @@ def main():
     all_chunks = []
     for reg in regulations:
         all_chunks.extend(chunk_rule(reg))
-    print(f"{len(all_chunks)}개 청크 생성")
+    print(f"{len(all_chunks)}개 청크 (중복 제거 전)")
+
+    # ── 중복 id 제거 — 같은 청크가 여러 번 잡히는 거 방지 ──
+    seen_ids = set()
+    deduped = []
+    for c in all_chunks:
+        cid = c["id"]
+        if cid in seen_ids:
+            continue
+        seen_ids.add(cid)
+        deduped.append(c)
+    all_chunks = deduped
+    print(f"{len(all_chunks)}개 청크 (중복 제거 후)")
 
     conn = psycopg2.connect(DB_URL)
     cur  = conn.cursor()
@@ -152,12 +196,22 @@ def main():
     print("테이블 생성 완료")
 
     total = len(all_chunks)
+    print(f"\n임베딩 + 적재 시작: 총 {total}개 청크 (배치 크기 {BATCH})")
+    print(f"예상 소요: 약 {total // BATCH * 1.5 / 60:.0f}~{total // BATCH * 3 / 60:.0f}분")
+    print()
+
+    success = 0
     for i in range(0, total, BATCH):
         batch = all_chunks[i:i + BATCH]
         try:
-            embeddings = model.encode(
-                [c["text"] for c in batch], normalize_embeddings=True
-            ).tolist()
+            # Upstage는 4000자 이하 권장 — 너무 긴 청크는 잘라서 보냄
+            texts = [(c["text"] or "")[:8000] for c in batch]
+            embeddings = embed_batch(texts)
+
+            if len(embeddings) != len(batch):
+                print(f"  ⚠️ 응답 개수 불일치 ({len(embeddings)} vs {len(batch)}), 스킵")
+                continue
+
             rows = [
                 (c["id"], c["rule_title"], c["seq"], c["article"],
                  c["department"], c["url"], c["text"], emb)
@@ -170,14 +224,18 @@ def main():
                 rows
             )
             conn.commit()
-            print(f"  {min(i + BATCH, total)}/{total}")
+            success += len(rows)
+            done = min(i + BATCH, total)
+            pct = done / total * 100
+            print(f"  [{done:>5}/{total}] {pct:5.1f}% — 누적 성공 {success}")
+            time.sleep(SLEEP_MS / 1000.0)
         except Exception as e:
-            print(f"  배치 오류: {e}")
+            print(f"  ❌ 배치 오류 ({i}~{i+BATCH}): {e}")
             conn.rollback()
 
     cur.close()
     conn.close()
-    print(f"\n✅ 완료! {total}개 청크 → DB 저장")
+    print(f"\n✅ 완료! 총 {total}개 중 {success}개 청크 → DB 저장")
 
 
 if __name__ == "__main__":

@@ -74,7 +74,8 @@ def main():
             "seq_history": latest.get("seq_history", ""),
             "title":       title,
             "department":  dept,
-            "category":    "",  # history 에 없는 필드 — 기존 형식 유지용 빈값
+            "category":    reg.get("category", ""),   # crawler/patch_categories가 채워둔 "제N편 ..." 값
+            "chapter":     reg.get("chapter", 0),     # 편 번호 (1~8)
             "content":     latest.get("content", ""),
             "attachments": latest.get("attachments", []),
             "url":         url_late or latest.get("url", ""),

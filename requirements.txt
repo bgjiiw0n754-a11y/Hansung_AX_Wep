@@ -3,12 +3,15 @@ uvicorn[standard]
 python-multipart
 psycopg2-binary
 python-dotenv
-sentence-transformers
 groq
+anthropic
+voyageai
+requests
 python-docx
 reportlab
 pdfminer.six
 pdfplumber
 pyhwp
 lxml
+beautifulsoup4
 PyJWT

@@ -88,21 +88,9 @@ input::placeholder { color: #B0BDD4; }
 </div>
 
 <script>
-// 이미 로그인된 경우 바로 업로드 페이지로 이동
-(function() {
-  var token = localStorage.getItem('hsu_token');
-  if (!token) return;
-  try {
-    var payload = JSON.parse(atob(token.split('.')[1]));
-    if (payload.exp * 1000 > Date.now()) {
-      window.location.href = '/upload';
-    } else {
-      localStorage.removeItem('hsu_token');
-    }
-  } catch(e) {
-    localStorage.removeItem('hsu_token');
-  }
-})();
+// 관리자 로그인 페이지 진입 시 — 기존 토큰을 무조건 비워 로그인 폼을 다시 거치게 한다.
+// (관리자 진입은 항상 첫 단계가 로그인이어야 함)
+localStorage.removeItem('hsu_token');
 
 document.getElementById('upw').addEventListener('keydown', function(e) {
   if (e.key === 'Enter') doLogin();

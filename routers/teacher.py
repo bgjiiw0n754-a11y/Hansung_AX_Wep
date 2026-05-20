@@ -25,8 +25,6 @@ import psycopg2
 
 router = APIRouter(tags=["teacher"])
 
-GEN_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
-
 # ── PDF 폰트: 서버 시작 시 1회 초기화 ──────────────────────────────
 _PDF_FONT = "Helvetica"
 
@@ -71,15 +69,22 @@ def _db_url():
         raise HTTPException(500, "DATABASE_URL이 .env에 설정되지 않았습니다.")
     return url
 
-def set_ai_client(client):
-    pass  # 호환성 유지용
+def set_ai_client(ctx):
+    """server.py에서 호출. ctx = {anthropic, claude_model, claude_chat, groq}"""
+    global _AI_CTX
+    _AI_CTX = ctx
 
-def _client():
-    from groq import Groq
-    key = os.getenv("GROQ_API_KEY")
-    if not key:
-        raise HTTPException(500, "GROQ_API_KEY가 .env에 없습니다.")
-    return Groq(api_key=key)
+_AI_CTX = None
+
+def _claude_chat(messages: list[dict], system: str = "", max_tokens: int = 2500,
+                 temperature: float = 0.1) -> str:
+    """Claude 답변 생성. server.py의 claude_chat() 헬퍼를 위임 호출 (fallback 포함)."""
+    if not _AI_CTX or not _AI_CTX.get("claude_chat"):
+        raise HTTPException(500, "AI 클라이언트가 초기화되지 않았습니다.")
+    return _AI_CTX["claude_chat"](
+        messages=messages, system=system,
+        max_tokens=max_tokens, temperature=temperature
+    )
 
 
 # ── 텍스트 추출 ────────────────────────────────────────────────────
@@ -382,7 +387,7 @@ async def analyze_conflict(file: UploadFile = File(...)):
             )
     rules_ctx = "\n\n".join(rules_ctx_parts)
 
-    # 업로드 문서는 8000자까지 (앞부분이 보통 핵심)
+    # 업로드 문서는 자까지 (앞부분이 보통 핵심)
     doc_for_ai = doc_text[:8000]
 
     prompt = f"""당신은 한성대학교 규정 검토 전문가입니다.
@@ -441,13 +446,12 @@ async def analyze_conflict(file: UploadFile = File(...)):
 }}"""
 
     try:
-        resp = _client().chat.completions.create(
-            model=GEN_MODEL,
+        raw = _claude_chat(
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=2200,
+            max_tokens=2500,
             temperature=0.1,
         )
-        raw = resp.choices[0].message.content.strip()
+        raw = (raw or "").strip()
         raw = re.sub(r'^```json\s*', '', raw)
         raw = re.sub(r'^```\s*', '', raw)
         raw = re.sub(r'\s*```$', '', raw)
