@@ -6,7 +6,12 @@ import time
 import requests
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
-load_dotenv()
+
+# .env를 server.py 파일과 같은 디렉토리에서 명시적으로 로드
+# (cwd가 달라도 동작하도록)
+_ENV_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+load_dotenv(_ENV_PATH)
+print(f"[ENV] .env 로드 시도: {_ENV_PATH}  존재: {os.path.exists(_ENV_PATH)}")
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Depends
 from fastapi.middleware.cors import CORSMiddleware
@@ -461,72 +466,190 @@ def auth_check(payload: dict = Depends(verify_token)):
 
 # ── 텍스트 추출 헬퍼 ──────────────────────────────────────────────
 def _extract_text(file: UploadFile) -> str:
+    """업로드 파일에서 텍스트 추출. 지원: PDF, DOCX, TXT, JSON, HWP, HWPX, DOC.
+    각 형식별로 여러 폴백 경로를 시도하며, 모두 실패하면 어떤 단계에서 어떻게
+    실패했는지 자세한 에러를 반환한다."""
     import io
     file.file.seek(0)
     data  = file.file.read()
     fname = (file.filename or "").lower()
     ctype = (file.content_type or "").lower()
 
+    if not data:
+        raise HTTPException(400, "빈 파일입니다.")
+
+    # ── PDF ─────────────────────────────────────────────────────
     if fname.endswith(".pdf") or "pdf" in ctype:
+        errors = []
+        # 1) pdfminer
         try:
-            from pdfminer.high_level import extract_text
-            text = extract_text(io.BytesIO(data))
+            from pdfminer.high_level import extract_text as _pdfminer_extract
+            text = _pdfminer_extract(io.BytesIO(data))
             if text and text.strip():
                 return text.strip()
-        except Exception:
-            pass
-        raise HTTPException(400, "PDF 텍스트 추출 실패")
+            errors.append("pdfminer: 빈 텍스트")
+        except Exception as e:
+            errors.append(f"pdfminer: {e}")
+        # 2) pdfplumber 폴백
+        try:
+            import pdfplumber
+            with pdfplumber.open(io.BytesIO(data)) as pdf:
+                parts = []
+                for page in pdf.pages:
+                    t = page.extract_text() or ""
+                    if t.strip():
+                        parts.append(t)
+                if parts:
+                    return "\n".join(parts).strip()
+            errors.append("pdfplumber: 빈 텍스트")
+        except Exception as e:
+            errors.append(f"pdfplumber: {e}")
+        raise HTTPException(400, f"PDF 텍스트 추출 실패. 시도: {' | '.join(errors)}")
 
+    # ── DOCX ────────────────────────────────────────────────────
     if fname.endswith(".docx") or "wordprocessingml" in ctype:
-        from docx import Document as DocxDoc
-        doc = DocxDoc(io.BytesIO(data))
-        return "\n".join(p.text for p in doc.paragraphs if p.text.strip())
+        try:
+            from docx import Document as DocxDoc
+            doc = DocxDoc(io.BytesIO(data))
+            parts = [p.text for p in doc.paragraphs if p.text.strip()]
+            # 표 안 텍스트도 가져옴
+            for table in doc.tables:
+                for row in table.rows:
+                    for cell in row.cells:
+                        t = cell.text.strip()
+                        if t and t not in parts:
+                            parts.append(t)
+            if not parts:
+                raise HTTPException(400, "DOCX 본문이 비어있습니다.")
+            return "\n".join(parts)
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(400, f"DOCX 추출 실패: {e}")
 
+    # ── HWPX (한글 2014+ 표준, ZIP 기반) ─────────────────────────
     if fname.endswith(".hwpx"):
         import zipfile
-        texts = []
         try:
             with zipfile.ZipFile(io.BytesIO(data)) as z:
-                section_files = sorted([f for f in z.namelist()
+                names = z.namelist()
+                # section XML 파일들
+                section_files = sorted([f for f in names
                     if _re.match(r'Contents/[Ss]ection\d+\.xml', f)])
                 if not section_files:
-                    section_files = [f for f in z.namelist()
+                    section_files = [f for f in names
                         if f.endswith('.xml') and 'section' in f.lower()]
+                if not section_files:
+                    raise HTTPException(400,
+                        f"HWPX 안에 section XML이 없습니다. (포함 파일: {names[:5]}...)")
                 from bs4 import BeautifulSoup as _BS
+                texts = []
                 for sf in section_files:
-                    try:    soup = _BS(z.read(sf), "xml")
-                    except: soup = _BS(z.read(sf), "html.parser")
+                    raw = z.read(sf)
+                    try:    soup = _BS(raw, "xml")
+                    except: soup = _BS(raw, "html.parser")
+                    # 한글 hwpx 본문은 보통 hp:t 태그
                     for tag in soup.find_all(_re.compile(r'(?:hp:)?t$')):
-                        if tag.get_text().strip():
-                            texts.append(tag.get_text())
+                        t = tag.get_text()
+                        if t.strip():
+                            texts.append(t)
+                if not texts:
+                    raise HTTPException(400, "HWPX 본문 텍스트가 비어있습니다.")
+                return "\n".join(texts)
+        except HTTPException:
+            raise
+        except zipfile.BadZipFile:
+            raise HTTPException(400, "HWPX 파일이 손상되었거나 ZIP 형식이 아닙니다.")
         except Exception as e:
             raise HTTPException(400, f"HWPX 추출 실패: {e}")
-        return "\n".join(texts)
 
+    # ── HWP (한글 2010 이전, OLE 기반) ──────────────────────────
     if fname.endswith(".hwp"):
-        import tempfile, subprocess, sys, os as _os
-        tmp = _os.path.join(tempfile.gettempdir(), f"hsu_hwp_{_os.getpid()}.hwp")
+        import tempfile, subprocess, sys, os as _os, time as _time
+        errors = []
+
+        # 임시 파일 생성 (충돌 방지 — pid + 타임스탬프)
+        uniq = f"{_os.getpid()}_{int(_time.time()*1000)}"
+        tmp = _os.path.join(tempfile.gettempdir(), f"hsu_hwp_{uniq}.hwp")
         try:
             with open(tmp, "wb") as f:
                 f.write(data)
+
+            # 1) hwp5txt 외부 명령 (가장 정확)
             scripts_dir = _os.path.join(_os.path.dirname(sys.executable), "Scripts")
-            for cmd in [
+            cmds_to_try = [
                 [_os.path.join(scripts_dir, "hwp5txt.exe"), tmp],
+                [_os.path.join(scripts_dir, "hwp5txt"), tmp],
                 ["hwp5txt", tmp],
                 [sys.executable, "-m", "hwp5.hwp5txt", tmp],
-            ]:
+                [sys.executable, "-m", "pyhwp.hwp5txt", tmp],
+            ]
+            for cmd in cmds_to_try:
                 try:
                     result = subprocess.run(cmd, capture_output=True, timeout=60,
                                             encoding="utf-8", errors="replace")
-                    if result.returncode == 0 and result.stdout.strip():
+                    if result.returncode == 0 and result.stdout and result.stdout.strip():
                         return result.stdout.strip()
-                except (FileNotFoundError, OSError):
+                    if result.returncode != 0:
+                        errors.append(f"{cmd[0]}: returncode={result.returncode} stderr={(result.stderr or '')[:200]}")
+                except FileNotFoundError:
                     continue
-            raise HTTPException(400, "HWP 추출 실패.")
+                except subprocess.TimeoutExpired:
+                    errors.append(f"{cmd[0]}: timeout (60s)")
+                except Exception as e:
+                    errors.append(f"{cmd[0]}: {e}")
+
+            # 2) pyhwp 라이브러리 직접 호출 (외부 명령 다 실패 시)
+            try:
+                from hwp5.dataio import ParseError
+                from hwp5.xmlmodel import Hwp5File
+                hwp = Hwp5File(tmp)
+                texts = []
+                for section in hwp.bodytext.sections:
+                    for para in section.paragraphs:
+                        t = para.text if hasattr(para, 'text') else str(para)
+                        if t and t.strip():
+                            texts.append(t.strip())
+                if texts:
+                    return "\n".join(texts)
+                errors.append("pyhwp xmlmodel: 빈 텍스트")
+            except Exception as e:
+                errors.append(f"pyhwp xmlmodel: {e}")
+
+            # 3) olefile로 PrvText 스트림 직접 추출 (마지막 폴백 — 미리보기 텍스트)
+            try:
+                import olefile
+                ole = olefile.OleFileIO(tmp)
+                if ole.exists('PrvText'):
+                    raw = ole.openstream('PrvText').read()
+                    # PrvText는 UTF-16LE 인코딩
+                    text = raw.decode('utf-16-le', errors='ignore').strip()
+                    if text:
+                        ole.close()
+                        # 미리보기는 본문 일부만 — 경고
+                        print("⚠️ HWP 본문 추출 실패 → PrvText(미리보기) 사용")
+                        return text
+                ole.close()
+                errors.append("olefile: PrvText 스트림 없음")
+            except Exception as e:
+                errors.append(f"olefile: {e}")
+
+            # 모두 실패 — 상세 에러
+            detail = " | ".join(errors[:5]) if errors else "원인 불명"
+            raise HTTPException(400,
+                f"HWP 추출 실패. 시도한 방법이 모두 실패했습니다.\n"
+                f"세부 원인: {detail}\n"
+                f"해결: 한글 프로그램에서 파일을 열어 '다른 이름으로 저장' → HWPX 또는 DOCX로 변환 후 다시 업로드해 주세요.")
         finally:
             try: _os.unlink(tmp)
             except: pass
 
+    # ── DOC (구버전 워드, 한국 학교에 종종 있음) ────────────────
+    if fname.endswith(".doc"):
+        raise HTTPException(400,
+            "구버전 DOC 형식은 지원하지 않습니다. Word에서 '다른 이름으로 저장' → DOCX로 변환 후 업로드해 주세요.")
+
+    # ── JSON ────────────────────────────────────────────────────
     if fname.endswith(".json"):
         try:
             items = _json.loads(data.decode("utf-8"))
@@ -648,6 +771,54 @@ async def upload_regulation(file: UploadFile = File(...), payload: dict = Depend
         with open(os.path.join(BASE_DIR, "uploads", filename), "wb") as f:
             f.write(file.file.read())
     except: pass
+
+    # ── history.json에도 등록 → 개정 탭의 규정 목록에 노출되도록 ──
+    # 이미 같은 title이 history에 있으면 추가하지 않음 (중복 방지)
+    try:
+        history = _load_history_json()
+        rule_title_clean = os.path.splitext(filename)[0]  # 확장자 제거
+        already = any((r.get("title") or "").strip() == rule_title_clean.strip() for r in history)
+        if not already:
+            # 새 seq 할당 — 기존 최대 seq + 1 (충돌 방지)
+            max_seq = max((int(r.get("seq", 0)) for r in history), default=0)
+            new_seq = max_seq + 1
+            today = datetime.now().strftime("%Y-%m-%d")
+            history.append({
+                "seq":        new_seq,
+                "title":      rule_title_clean,
+                "department": f"업로드 규정 (제{chap_num}편)",
+                "chapter":    int(chap_num),
+                "category":   f"제{chap_num}편 {CHAP_MAP_UP.get(chap_num, '학사행정')}",
+                "url_latest": upload_tag,
+                "version_count": 1,
+                "versions": [{
+                    "seq_history":   new_seq * 10000,   # 임시 hist id
+                    "revision_date": today,
+                    "revision_type": "신규",
+                    "revision_label": "업로드 등록",
+                    "is_latest":     True,
+                    "content":       text,
+                    "url":           upload_tag,
+                    "department":    f"업로드 규정 (제{chap_num}편)",
+                    "attachments":   [],
+                }],
+                "revision_history_table": [],
+                "_uploaded": True,    # 업로드 출처 표시 (구분용)
+            })
+            _save_history_json(history)
+            print(f"[UPLOAD] history.json에 등록: seq={new_seq}, title={rule_title_clean!r}")
+
+            # DB 청크에도 seq를 채워줌 → 개정 시 _reindex가 찾을 수 있도록
+            try:
+                conn = psycopg2.connect(DB_URL); cur = conn.cursor()
+                cur.execute("UPDATE rule_chunks SET seq=%s WHERE url=%s",
+                            (str(new_seq), upload_tag))
+                conn.commit(); conn.close()
+            except Exception as e:
+                print(f"[UPLOAD] DB seq 갱신 실패(무시): {e}")
+    except Exception as e:
+        # history 등록 실패해도 업로드 자체는 성공으로 처리 (그래야 사용자가 알아챔)
+        print(f"[UPLOAD] history.json 등록 실패(무시): {e}")
 
     return {"success": True, "filename": filename, "chunks": inserted}
 
@@ -1758,6 +1929,160 @@ def _reindex_rule_chunks(seq, title: str, dept: str, url: str, content: str) -> 
         raise HTTPException(500, f"DB 재색인 실패: {e}")
     finally:
         conn.close()
+
+
+# -- 규정 개정 미리보기 (파일/텍스트 입력 → 현행과 비교만, 적용 X) -----
+@app.post("/revise-preview")
+async def revise_preview(
+    seq: int = Form(...),
+    text: str = Form(None),
+    file: UploadFile = File(None),
+    payload: dict = Depends(verify_token),
+):
+    """파일 또는 텍스트를 받아 '현행 본문' vs '개정안' 미리보기를 반환한다.
+    실제 DB는 건드리지 않는다. 사용자가 비교 후 확인하면 별도로 /revise-regulation 호출."""
+
+    # ① 개정안 본문 추출
+    new_content = ""
+    extract_method = ""
+    if file is not None and (file.filename or ""):
+        try:
+            new_content = _extract_text(file)
+            extract_method = f"파일({file.filename})"
+        except HTTPException as e:
+            # 추출 실패 시 상세 에러 그대로 전달
+            raise
+        except Exception as e:
+            raise HTTPException(400, f"파일 읽기 실패: {e}")
+    elif text and text.strip():
+        new_content = text.strip()
+        extract_method = "직접 입력"
+    else:
+        raise HTTPException(400, "개정안(파일 또는 텍스트)이 필요합니다.")
+
+    if not new_content or len(new_content.strip()) < 10:
+        raise HTTPException(400, "개정안 내용이 너무 짧습니다.")
+
+    # ② 현행 규정 본문 로드
+    history = _load_history_json()
+    target = None
+    for r in history:
+        if int(r.get("seq", -1)) == seq:
+            target = r
+            break
+    if not target:
+        raise HTTPException(404, f"seq={seq} 규정을 찾을 수 없습니다.")
+
+    latest_idx = _get_latest_version_index(target)
+    latest = target["versions"][latest_idx]
+    current_content = latest.get("content", "") or ""
+
+    # ③ 글자 단위 diff — segments 하나로 양쪽 컬럼에서 공유 사용
+    import difflib
+    sm = difflib.SequenceMatcher(None, current_content, new_content, autojunk=False)
+    segments = []
+    for tag, i1, i2, j1, j2 in sm.get_opcodes():
+        if tag == "equal":
+            segments.append({"text": current_content[i1:i2], "kind": "equal"})
+        elif tag == "delete":
+            segments.append({"text": current_content[i1:i2], "kind": "delete"})
+        elif tag == "insert":
+            segments.append({"text": new_content[j1:j2], "kind": "insert"})
+        elif tag == "replace":
+            # 글자 단위에서는 replace를 (지움 + 추가)로 풀어서 표시
+            segments.append({"text": current_content[i1:i2], "kind": "delete"})
+            segments.append({"text": new_content[j1:j2], "kind": "insert"})
+
+    return {
+        "seq": seq,
+        "title": target.get("title", ""),
+        "current_content": current_content,
+        "current_length": len(current_content),
+        "current_revision_date": latest.get("revision_date", ""),
+        "new_content": new_content,
+        "new_length": len(new_content),
+        "extract_method": extract_method,
+        "segments": segments,
+        "similarity": round(sm.ratio() * 100, 1),
+    }
+
+
+# -- 조 단위 개정 미리보기 (DB 적용 X, 비교만) -----------------------
+@app.post("/revise-article-preview")
+async def revise_article_preview(
+    seq: int = Form(...),
+    index: int = Form(...),
+    text: str = Form(...),
+    payload: dict = Depends(verify_token),
+):
+    """조 단위 개정 미리보기 — 현행 조항 vs 개정안 조항을 비교한다.
+    실제 적용 시(/revise-article) 머리글에 '(개정 YYYY-MM-DD)'가 부착되므로,
+    미리보기에서도 동일한 표시를 부착한 상태로 비교한다."""
+    new_text = (text or "").strip()
+    if len(new_text) < 5:
+        raise HTTPException(400, "개정할 조항 내용이 너무 짧습니다.")
+
+    history = _load_history_json()
+    target = None
+    for r in history:
+        if int(r.get("seq", -1)) == seq:
+            target = r
+            break
+    if target is None:
+        raise HTTPException(404, f"seq={seq} 규정을 찾을 수 없습니다.")
+
+    latest_idx = _get_latest_version_index(target)
+    latest = target["versions"][latest_idx]
+    content = latest.get("content", "") or ""
+
+    arts = _split_articles(content)
+    if index < 0 or index >= len(arts):
+        raise HTTPException(404, "해당 조를 찾을 수 없습니다.")
+    a = arts[index]
+
+    # 현행 조항 텍스트
+    current_article_text = content[a["start"]:a["end"]].rstrip("\n")
+
+    # 개정안 조항 텍스트 — 실제 적용과 동일하게 (개정 YYYY-MM-DD) 부착
+    today = datetime.now().strftime("%Y-%m-%d")
+    nt_lines = new_text.split("\n")
+    head_re = _re.compile(r'^(제\s*\d+\s*조(?:의\s*\d+)?\s*(?:\([^)]*\))?)')
+    if nt_lines and head_re.match(nt_lines[0].strip()):
+        first = nt_lines[0].rstrip()
+        first = _re.sub(r'\s*\(개정\s*\d{4}-\d{2}-\d{2}\)\s*$', '', first)
+        nt_lines[0] = f"{first} (개정 {today})"
+        new_article_text = "\n".join(nt_lines)
+    else:
+        new_article_text = f"{a['head']} (개정 {today})\n{new_text}"
+
+    # 글자 단위 diff
+    import difflib
+    sm = difflib.SequenceMatcher(None, current_article_text, new_article_text, autojunk=False)
+    segments = []
+    for tag, i1, i2, j1, j2 in sm.get_opcodes():
+        if tag == "equal":
+            segments.append({"text": current_article_text[i1:i2], "kind": "equal"})
+        elif tag == "delete":
+            segments.append({"text": current_article_text[i1:i2], "kind": "delete"})
+        elif tag == "insert":
+            segments.append({"text": new_article_text[j1:j2], "kind": "insert"})
+        elif tag == "replace":
+            segments.append({"text": current_article_text[i1:i2], "kind": "delete"})
+            segments.append({"text": new_article_text[j1:j2], "kind": "insert"})
+
+    return {
+        "seq": seq,
+        "index": index,
+        "title": (target.get("title", "") + " — " + a["head"] + a["dup_label"]),
+        "current_content": current_article_text,
+        "current_length": len(current_article_text),
+        "current_revision_date": latest.get("revision_date", ""),
+        "new_content": new_article_text,
+        "new_length": len(new_article_text),
+        "extract_method": "직접 입력 (조 단위)",
+        "segments": segments,
+        "similarity": round(sm.ratio() * 100, 1),
+    }
 
 
 # -- 규정 개정 (전체) ----------------------------------------------
