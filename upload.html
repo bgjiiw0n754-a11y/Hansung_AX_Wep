@@ -159,18 +159,59 @@ header .crumb .cur { color: #fff; font-weight: 600; font-size: 12px; }
 .rev-submit:hover { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(181,101,29,0.3); }
 .rev-submit:disabled { opacity: 0.55; cursor: not-allowed; transform: none; box-shadow: none; }
 
-/* 되돌리기 패널 */
-.rollback-card { background: #fff; border-radius: 20px; padding: 28px 36px; box-shadow: 0 8px 40px rgba(0,48,135,0.10); margin-top: 24px; }
-.rollback-title { font-size: 16px; font-weight: 700; color: #B5651D; margin-bottom: 2px; }
-.rollback-sub { font-size: 12px; color: #6B7A99; margin-bottom: 16px; }
-.rollback-row { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: #FFF8F0; border: 1px solid #F0DEC4; border-radius: 10px; margin-bottom: 7px; }
-.rollback-info { flex: 1; min-width: 0; }
-.rollback-name { font-size: 12px; font-weight: 700; color: #1A2340; }
-.rollback-meta { font-size: 10px; color: #6B7A99; margin-top: 2px; }
-.rollback-btn { flex-shrink: 0; padding: 6px 14px; border: 1.5px solid #C5A878; border-radius: 8px; background: #fff; color: #B5651D; font-size: 12px; font-weight: 700; cursor: pointer; font-family: 'Noto Sans KR', sans-serif; }
-.rollback-btn:hover { background: #B5651D; color: #fff; border-color: #B5651D; }
-.rollback-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-.rollback-empty { text-align: center; padding: 18px; color: #B0BDD4; font-size: 12px; }
+/* ────── 활동 로그 사이드바 (깃허브 커밋 피드 스타일) ────── */
+.activity-log {
+  position: fixed; top: 0; right: 0; width: 320px; height: 100vh;
+  background: #fff; border-left: 1px solid var(--border);
+  box-shadow: -4px 0 24px rgba(0,48,135,0.06);
+  display: flex; flex-direction: column;
+  z-index: 100; transition: transform 0.25s ease;
+}
+.activity-log.collapsed { transform: translateX(calc(100% - 40px)); }
+/* 토글 버튼: 사이드바 좌측 가장자리에 고정 — 접혀도 항상 화면에 보임 */
+.log-toggle {
+  position: absolute; top: 14px; left: 6px; z-index: 2;
+  background: #fff; border: 1px solid var(--blue-border); border-radius: 50%;
+  width: 28px; height: 28px; cursor: pointer; color: var(--blue); font-size: 16px;
+  display: flex; align-items: center; justify-content: center; font-family: inherit;
+  transition: all 0.15s; box-shadow: 0 2px 6px rgba(0,48,135,0.08);
+}
+.log-toggle:hover { background: var(--blue-pale); border-color: var(--blue-mid); }
+.activity-log.collapsed .log-toggle { transform: rotate(180deg); }
+.log-head { display: flex; align-items: center; padding: 16px 18px 6px 44px; }
+.log-head-title { font-size: 14px; font-weight: 700; color: var(--blue); white-space: nowrap; }
+.log-sub { padding: 0 18px 12px 44px; font-size: 11.5px; color: var(--text-muted); border-bottom: 1px solid #EEF2F8; }
+/* 접혔을 때 본문/제목은 가시 영역(40px) 밖에 있어 안 보임 — 토글만 남음 */
+.log-list { flex: 1; overflow-y: auto; padding: 12px 14px; }
+.log-empty { text-align: center; padding: 32px 14px; color: #B0BDD4; font-size: 12.5px; }
+.log-row { display: flex; gap: 10px; align-items: flex-start;
+  padding: 10px 12px; border-radius: 10px; margin-bottom: 6px;
+  transition: background 0.12s; position: relative; }
+.log-row:hover { background: #F8FAFD; }
+.log-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; margin-top: 7px; }
+.log-row.log-blue  .log-dot { background: var(--blue); box-shadow: 0 0 0 3px var(--blue-pale); }
+.log-row.log-amber .log-dot { background: #D88A2E; box-shadow: 0 0 0 3px #FBEFD9; }
+.log-row.log-green .log-dot { background: #15803D; box-shadow: 0 0 0 3px #E8F4EC; }
+.log-body { flex: 1; min-width: 0; }
+.log-kind { font-size: 10.5px; font-weight: 700; color: var(--text-muted); letter-spacing: 0.3px; margin-bottom: 2px; }
+.log-icon { margin-right: 4px; }
+.log-title { font-size: 12.5px; font-weight: 600; color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.log-meta { font-size: 10.5px; color: var(--text-muted); margin-top: 2px; }
+.log-undo { flex-shrink: 0; width: 30px; height: 30px; border: 1px solid var(--blue-border);
+  background: #fff; border-radius: 8px; cursor: pointer; font-size: 13px;
+  display: flex; align-items: center; justify-content: center; font-family: inherit; }
+.log-undo:hover { background: var(--blue-pale); border-color: var(--blue-mid); }
+.log-undo:disabled { opacity: 0.4; cursor: not-allowed; }
+/* 본문에 사이드바 폭만큼 우측 마진 — 페이지 콘텐츠가 가려지지 않도록 */
+body { padding-right: 320px; transition: padding 0.25s; }
+body.log-collapsed { padding-right: 40px; }
+@media (max-width: 1100px) {
+  body { padding-right: 0; }
+  body.log-collapsed { padding-right: 0; }
+  .activity-log { transform: translateX(calc(100% - 40px)); }
+  .activity-log:not(.collapsed) { transform: translateX(0); box-shadow: -8px 0 32px rgba(0,48,135,0.15); }
+}
 
 /* 개정 범위(전체/조 단위) 선택 */
 .rev-scope-tabs { display: flex; gap: 6px; margin-bottom: 12px; }
@@ -267,6 +308,94 @@ header .crumb .cur { color: #fff; font-weight: 600; font-size: 12px; }
 .fmt-tip-label { font-size: 10px; font-weight: 700; letter-spacing: 0.5px; margin-bottom: 4px; opacity: 0.75; }
 .fmt-mark:hover .fmt-tip,
 .fmt-mark.show-tip .fmt-tip { display: block; }
+/* ════════════════ 회의록 기반 AI 개정 ════════════════ */
+.meeting-intro { background: #F8FAFD; border: 1px solid var(--border); border-radius: 10px;
+  padding: 14px 18px; margin-bottom: 16px; font-size: 13px; line-height: 1.85; color: var(--text-muted); }
+.meeting-fname { margin-top: 12px; font-size: 12.5px; color: var(--blue); font-weight: 600; }
+.meeting-summary { font-size: 13.5px; font-weight: 700; color: var(--blue); margin: 22px 0 14px;
+  padding: 12px 16px; background: var(--blue-pale); border-radius: 10px;
+  border-left: 4px solid var(--blue-mid); }
+.meeting-item { background: #fff; border: 1px solid var(--blue-border); border-radius: 14px;
+  padding: 20px 22px; margin-bottom: 14px; display: flex; flex-direction: column; gap: 12px;
+  box-shadow: 0 1px 3px rgba(0,48,135,0.04); }
+.meeting-item.unmatched { border-color: #EFD3CE; background: #FCF6F4; }
+.meeting-item-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.meeting-item-title { flex: 1; font-size: 15px; font-weight: 700; color: var(--text); min-width: 0;
+  letter-spacing: -0.2px; }
+.meeting-conf { font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 10px;
+  white-space: nowrap; }
+.meeting-conf.high   { background: #E8F4EC; color: #15803D; border: 1px solid #B9DDC5; }
+.meeting-conf.medium { background: var(--amber-pale); color: var(--amber); border: 1px solid var(--amber-border); }
+.meeting-conf.low    { background: #FBE9E7; color: #C0392B; border: 1px solid #EFD3CE; }
+.meeting-art { font-size: 13.5px; color: var(--blue); font-weight: 700; display: flex; align-items: center;
+  gap: 6px; }
+.meeting-reason { font-size: 12.5px; color: var(--text-muted); line-height: 1.65;
+  padding: 10px 14px; background: #FBFCFE; border-left: 3px solid var(--blue-mid); border-radius: 0 8px 8px 0; }
+.meeting-note { font-size: 11.5px; color: #C0392B; padding: 4px 0; }
+.meeting-change-list { font-size: 12px; color: var(--blue); background: var(--blue-pale);
+  padding: 10px 14px; border-radius: 8px; line-height: 1.6;
+  border-left: 3px solid var(--blue-mid); }
+.meeting-actions { display: flex; gap: 8px; margin-top: 2px; }
+.meeting-preview-btn { padding: 10px 20px; border: 1.5px solid var(--blue-mid); border-radius: 10px;
+  background: #fff; color: var(--blue); font-size: 13px; font-weight: 700; cursor: pointer;
+  font-family: 'Noto Sans KR', sans-serif; transition: all 0.15s; }
+.meeting-preview-btn:hover { background: var(--blue-pale); transform: translateY(-1px); }
+.meeting-preview-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+.meeting-skip { font-size: 11.5px; color: var(--text-muted); padding: 6px 10px; }
+/* AI 추출 본문 미리보기·수정 — 카드 안에 펼쳐지는 영역 */
+.mi-body-wrap { border-top: 1px dashed var(--blue-border); padding-top: 8px; margin-top: 2px; }
+.mi-body-head { font-size: 12px; font-weight: 600; color: var(--blue-mid); cursor: pointer;
+  user-select: none; padding: 4px 0; }
+.mi-body-head:hover { color: var(--blue); }
+.mi-body-meta { color: var(--text-muted); font-weight: 500; margin-left: 6px; }
+.mi-body-box { margin-top: 8px; }
+.mi-body-ta { width: 100%; min-height: 200px; border: 1.5px solid var(--blue-border);
+  border-radius: 8px; padding: 12px 14px; font-family: 'Noto Sans KR', monospace;
+  font-size: 12.5px; line-height: 1.75; color: var(--text); resize: vertical; box-sizing: border-box; }
+.mi-body-ta:focus { outline: none; border-color: var(--blue-mid); }
+.mi-body-hint { font-size: 11.5px; color: var(--text-muted); margin-top: 6px; }
+/* 현행과 동일/매우 유사한 경우 카드에 경고 표시 */
+.meeting-item.echo-warn { border-color: var(--amber-border); background: var(--amber-pale); }
+.meeting-item.echo-warn .meeting-item-head::after {
+  content: "현행과 거의 동일 — 직접 수정 필요";
+  margin-left: auto; font-size: 10.5px; padding: 3px 8px;
+  background: var(--amber); color: #fff; border-radius: 8px; font-weight: 700;
+}
+/* 입력 방식 토글 */
+.meeting-mode-toggle { display: flex; gap: 6px; margin-bottom: 14px;
+  background: #F4F8FE; border-radius: 12px; padding: 4px; }
+.mm-tab { flex: 1; height: 40px; border: none; background: transparent; cursor: pointer;
+  font-family: 'Noto Sans KR', sans-serif; font-size: 13px; font-weight: 600; color: var(--text-muted);
+  border-radius: 9px; transition: all 0.15s; }
+.mm-tab:hover { color: var(--blue); }
+.mm-tab.active { background: #fff; color: var(--blue); box-shadow: 0 2px 6px rgba(0,48,135,0.08); }
+/* 직접 입력 영역 */
+.mm-text-row { margin-bottom: 14px; }
+.mm-label { display: block; font-size: 12px; font-weight: 700; color: var(--blue);
+  margin-bottom: 6px; letter-spacing: 0.3px; }
+.mm-textarea { width: 100%; min-height: 280px; border: 1.5px solid var(--blue-border);
+  border-radius: 10px; padding: 14px 16px; font-family: 'Noto Sans KR', sans-serif; font-size: 13.5px;
+  line-height: 1.75; color: var(--text); resize: vertical; box-sizing: border-box; }
+.mm-textarea:focus { outline: none; border-color: var(--blue-mid); }
+.mm-rule-picker { position: relative; }
+.mm-rule-search { width: 100%; height: 38px; border: 1.5px solid var(--blue-border); border-radius: 9px;
+  padding: 0 12px; font-family: 'Noto Sans KR', sans-serif; font-size: 13px; box-sizing: border-box; }
+.mm-rule-search:focus { outline: none; border-color: var(--blue-mid); }
+.mm-rule-picked { margin-top: 8px; padding: 10px 14px; background: var(--blue-pale);
+  border: 1px solid var(--blue-border); border-radius: 9px; font-size: 13px; font-weight: 600; color: var(--blue);
+  display: flex; align-items: center; gap: 8px; }
+.mm-rule-picked .mm-rule-clear { margin-left: auto; cursor: pointer; color: var(--text-muted);
+  font-size: 16px; padding: 0 4px; }
+.mm-rule-picked .mm-rule-clear:hover { color: #C0392B; }
+.mm-rule-list { max-height: 180px; overflow-y: auto; margin-top: 6px;
+  border: 1px solid var(--blue-border); border-radius: 9px; background: #fff; display: none; }
+.mm-rule-list.open { display: block; }
+.mm-rule-list-item { padding: 8px 12px; font-size: 12.5px; cursor: pointer;
+  border-bottom: 1px solid #EEF2F8; }
+.mm-rule-list-item:last-child { border-bottom: none; }
+.mm-rule-list-item:hover { background: var(--blue-pale); }
+.mm-rule-list-empty { padding: 14px; text-align: center; color: var(--text-muted); font-size: 12px; }
+
 /* ════════════════ 충돌 분석 ════════════════ */
 .conflict-intro { background: #F8FAFD; border: 1px solid var(--border); border-radius: 10px;
   padding: 14px 18px; margin-bottom: 16px; font-size: 13px; line-height: 1.85; color: var(--text-muted); }
@@ -383,6 +512,7 @@ header .crumb .cur { color: #fff; font-weight: 600; font-size: 12px; }
     <div class="mode-toggle">
       <button class="mode-tab active" id="tabAdd"    onclick="setMode('add')">➕ 규정 추가</button>
       <button class="mode-tab"        id="tabRevise" onclick="setMode('revise')">✏️ 규정 개정</button>
+      <button class="mode-tab"        id="tabMeeting" onclick="setMode('meeting')">📋 회의록 기반</button>
       <button class="mode-tab"        id="tabBulk"   onclick="setMode('bulk')">🔁 일괄 치환</button>
       <button class="mode-tab"        id="tabConflict" onclick="setMode('conflict')">⚡ 충돌 분석</button>
     </div>
@@ -567,6 +697,61 @@ header .crumb .cur { color: #fff; font-weight: 600; font-size: 12px; }
       <div class="summary-msg" id="bulkSummaryMsg"></div>
     </div>
 
+    <!-- ════════════════ 회의록 기반 AI 개정 모드 ════════════════ -->
+    <div id="modeMeeting" style="display:none">
+      <div class="meeting-intro">
+        규정 개정 회의자료/회의록을 업로드하거나 직접 입력하면 AI가 안건별로
+        <b>어떤 규정의 어떤 조항을 어떻게 개정하는지</b>를 자동 추출합니다.
+        <br>각 항목별로 <b>🔍 미리보기</b>를 누르면 기존 글자 단위 diff 모달로 비교 후 적용할 수 있습니다.
+      </div>
+
+      <!-- 입력 방식 토글: 파일 / 직접 입력 -->
+      <div class="meeting-mode-toggle">
+        <button class="mm-tab active" id="mmTabFile" onclick="setMeetingInputMode('file')">📎 파일 업로드</button>
+        <button class="mm-tab"        id="mmTabText" onclick="setMeetingInputMode('text')">✏️ 직접 입력</button>
+      </div>
+
+      <!-- 파일 업로드 입력 -->
+      <div id="mmInputFile">
+        <div class="upload-zone" id="meetingZone"
+             onclick="document.getElementById('meetingFile').click()"
+             ondragover="event.preventDefault();this.classList.add('drag')"
+             ondragleave="this.classList.remove('drag')"
+             ondrop="handleMeetingDrop(event)">
+          <input type="file" id="meetingFile" accept=".pdf,.docx,.txt,.hwp,.hwpx"
+                 style="display:none" onchange="onMeetingFileChosen(this)">
+          <div class="upload-zone-icon">📋</div>
+          <p><strong>클릭하거나 회의자료 파일을 드래그하세요</strong><br>HWP · PDF · DOCX · HWPX · TXT 지원</p>
+          <div id="meetingFileName" class="meeting-fname"></div>
+        </div>
+      </div>
+
+      <!-- 직접 입력 -->
+      <div id="mmInputText" style="display:none">
+        <div class="mm-text-row">
+          <label class="mm-label">대상 규정 (선택)</label>
+          <div class="mm-rule-picker">
+            <input type="text" id="mmRuleSearch" class="mm-rule-search" placeholder="규정명으로 검색 (비워두면 AI가 자동 매칭)"
+                   oninput="renderMmRuleList()">
+            <div id="mmRulePicked" class="mm-rule-picked" style="display:none"></div>
+            <div id="mmRuleList" class="mm-rule-list"></div>
+          </div>
+        </div>
+        <div class="mm-text-row">
+          <label class="mm-label">회의록 내용</label>
+          <textarea id="mmTextarea" class="mm-textarea"
+            placeholder="회의록 본문을 붙여넣으세요. 예시:&#10;&#10;[5-0-2] 인문과학연구원 규정 개정(안)&#10;개정 사유: ...&#10;&#10;현행규정&#10;제 1 조 (명칭) ...&#10;&#10;개정(안)&#10;제 1 조 (명칭) ..."></textarea>
+        </div>
+      </div>
+
+      <button class="bulk-btn" id="meetingAnalyzeBtn" onclick="doMeetingAnalyze()" disabled style="margin-top:14px;width:100%">
+        🤖 AI로 안건 추출
+      </button>
+
+      <div id="meetingResult"></div>
+      <div class="summary-msg" id="meetingSummaryMsg"></div>
+    </div>
+
     <!-- ════════════════ 충돌 분석 모드 ════════════════ -->
     <div id="modeConflict" style="display:none">
       <div class="conflict-intro">
@@ -593,25 +778,21 @@ header .crumb .cur { color: #fff; font-weight: 600; font-size: 12px; }
     </div>
   </div>
 
-  <!-- 업로드된 규정 목록 -->
-  <div class="list-card">
-    <div class="list-title">📋 업로드된 규정 목록</div>
-    <div class="list-sub">삭제 버튼으로 DB에서 제거할 수 있습니다</div>
-    <div id="ruleList"><div class="list-loading"><div class="spinner"></div>불러오는 중...</div></div>
-  </div>
-
-  <!-- 개정 되돌리기 (테스트용) -->
-  <div class="rollback-card">
-    <div class="rollback-title">↩️ 개정 되돌리기 (테스트용)</div>
-    <div class="rollback-sub">개정한 규정을 개정 직전 상태로 되돌립니다 — JSON과 DB 모두 복원됩니다</div>
-    <div id="rollbackList"><div class="rollback-empty">불러오는 중...</div></div>
-  </div>
-
   <div class="footer-btns">
     <button class="back-btn" onclick="window.location.href='/'">← 메인으로</button>
     <button class="logout-btn" onclick="doLogout()">로그아웃</button>
   </div>
 </div>
+
+<!-- ────────── 활동 로그 사이드바 (개정·치환·추가 통합 피드) ────────── -->
+<aside class="activity-log" id="activityLog">
+  <button class="log-toggle" onclick="toggleActivityLog()" title="접기/펴기">‹</button>
+  <div class="log-head">
+    <div class="log-head-title">📜 활동 로그</div>
+  </div>
+  <div class="log-sub">규정 추가·개정·일괄치환 활동 (개정·치환은 되돌리기 가능)</div>
+  <div class="log-list" id="rollbackList"><div class="log-empty">불러오는 중...</div></div>
+</aside>
 
 <!-- ────────── 개정 비교 모달 (현행 vs 개정안) ────────── -->
 <div class="rd-overlay" id="reviseDiffOverlay" onclick="if(event.target.id==='reviseDiffOverlay') closeReviseDiffModal()">
@@ -777,6 +958,7 @@ async function doUpload() {
 
 async function loadRuleList() {
   var el = document.getElementById('ruleList');
+  if (!el) return;   // ruleList 카드는 활동 로그 사이드바로 통합됨 — 더 이상 없음
   el.innerHTML = '<div class="list-loading"><div class="spinner"></div>불러오는 중...</div>';
   try {
     var res = await fetch('/uploaded-rules', { headers: { 'Authorization': 'Bearer ' + token } });
@@ -823,15 +1005,18 @@ function setMode(mode) {
   var subs = {
     add: '새 규정 파일을 추가하여 DB에 등록합니다',
     revise: '기존 규정을 검색해 선택한 뒤 내용을 개정합니다 (현행과 비교 후 적용)',
+    meeting: '회의자료/회의록을 업로드하면 AI가 안건별 개정안을 자동 추출해 줍니다',
     bulk: '특정 단어를 모든 규정에서 일괄로 찾아 바꿉니다',
     conflict: '문서를 업로드해 기존 규정과 충돌하는지 미리 검토합니다'
   };
   document.getElementById('tabAdd').classList.toggle('active', mode === 'add');
   document.getElementById('tabRevise').classList.toggle('active', mode === 'revise');
+  document.getElementById('tabMeeting').classList.toggle('active', mode === 'meeting');
   document.getElementById('tabBulk').classList.toggle('active', mode === 'bulk');
   document.getElementById('tabConflict').classList.toggle('active', mode === 'conflict');
   document.getElementById('modeAdd').style.display      = (mode === 'add')      ? 'block' : 'none';
   document.getElementById('modeRevise').style.display   = (mode === 'revise')   ? 'block' : 'none';
+  document.getElementById('modeMeeting').style.display  = (mode === 'meeting')  ? 'block' : 'none';
   document.getElementById('modeBulk').style.display     = (mode === 'bulk')     ? 'block' : 'none';
   document.getElementById('modeConflict').style.display = (mode === 'conflict') ? 'block' : 'none';
   document.querySelector('.card-sub').textContent = subs[mode] || subs.add;
@@ -1258,29 +1443,59 @@ function closeReviseDiffModal() {
 
 async function loadRollbackList() {
   var el = document.getElementById('rollbackList');
-  el.innerHTML = '<div class="rollback-empty">불러오는 중...</div>';
+  if (!el) return;
+  el.innerHTML = '<div class="log-empty">불러오는 중...</div>';
   try {
     var res = await fetch('/revision-backups', { headers: { 'Authorization': 'Bearer ' + token } });
     if (!res.ok) throw new Error();
     var data = await res.json();
     if (!data.backups || data.backups.length === 0) {
-      el.innerHTML = '<div class="rollback-empty">되돌릴 개정 내역이 없습니다</div>';
+      el.innerHTML = '<div class="log-empty">📭 활동 내역이 없습니다</div>';
       return;
     }
     el.innerHTML = data.backups.map(function(b) {
-      var when = (b.backed_up_at || '').replace('T', ' ');
-      return '<div class="rollback-row"><div class="rollback-info">' +
-        '<div class="rollback-name">' + escapeHtml(b.title) + '</div>' +
-        '<div class="rollback-meta">seq ' + b.seq + ' · 개정 시각 ' + when + '</div></div>' +
-        '<button class="rollback-btn" onclick="doRollback(\'' + b.backup_id + '\',this)">되돌리기</button></div>';
+      var when = (b.backed_up_at || '').replace('T', ' ').slice(0, 16);
+      var k = b.kind || '';
+      var kindMeta = {
+        'regulation_history': { icon: '✏️', label: '전체 개정',   color: 'blue',  action: 'rollback' },
+        'article_history':    { icon: '📌', label: '조 단위 개정', color: 'blue',  action: 'rollback' },
+        'bulk_replace':       { icon: '🔁', label: '일괄 치환',   color: 'amber', action: 'rollback' },
+        'upload':             { icon: '➕', label: '규정 추가됨', color: 'green', action: 'delete' },
+      }[k] || { icon: '📝', label: k || '활동', color: 'blue', action: 'rollback' };
+
+      var actionBtn = '';
+      if (kindMeta.action === 'rollback') {
+        actionBtn = '<button class="log-undo" onclick="doRollback(\'' + b.backup_id + '\',this)" title="되돌리기">↩️</button>';
+      } else if (kindMeta.action === 'delete') {
+        var fn = (b.extras && b.extras.filename) ? b.extras.filename : (b.title || '');
+        var safe = fn.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        actionBtn = '<button class="log-undo" onclick="doDeleteUploadFromLog(\'' + safe + '\',this)" title="삭제">🗑</button>';
+      }
+
+      var subMeta = '';
+      if (k === 'upload' && b.extras && b.extras.chunks != null) {
+        subMeta = ' · 청크 ' + b.extras.chunks + '개';
+      } else if (b.seq != null && b.seq !== '') {
+        subMeta = ' · seq ' + b.seq;
+      }
+
+      return '<div class="log-row log-' + kindMeta.color + '" data-bid="' + (b.backup_id || '') + '">' +
+        '<div class="log-dot"></div>' +
+        '<div class="log-body">' +
+          '<div class="log-kind"><span class="log-icon">' + kindMeta.icon + '</span>' + kindMeta.label + '</div>' +
+          '<div class="log-title" title="' + escapeHtml(b.title || '') + '">' + escapeHtml(b.title || '(제목 없음)') + '</div>' +
+          '<div class="log-meta">' + (when || '시간 정보 없음') + subMeta + '</div>' +
+        '</div>' +
+        actionBtn +
+      '</div>';
     }).join('');
   } catch(e) {
-    el.innerHTML = '<div class="rollback-empty">되돌리기 목록을 불러오지 못했습니다</div>';
+    el.innerHTML = '<div class="log-empty">로그를 불러오지 못했습니다</div>';
   }
 }
 async function doRollback(backupId, btn) {
-  if (!confirm('이 개정을 되돌리시겠습니까?\n\nJSON과 DB가 개정 직전 상태로 복원됩니다.')) return;
-  btn.disabled = true; btn.textContent = '복원 중...';
+  if (!confirm('이 활동을 되돌리시겠습니까?\n\nJSON과 DB가 직전 상태로 복원됩니다.')) return;
+  btn.disabled = true; btn.textContent = '⏳';
   try {
     var form = new FormData(); form.append('backup_id', backupId);
     var res = await fetch('/revision-rollback', {
@@ -1288,17 +1503,63 @@ async function doRollback(backupId, btn) {
     });
     var data = await res.json();
     if (!res.ok) throw new Error(data.detail || '되돌리기 실패');
-    var row = btn.closest('.rollback-row');
-    row.style.transition = 'opacity 0.3s'; row.style.opacity = '0';
-    setTimeout(function() {
-      row.remove();
-      if (!document.querySelector('.rollback-row')) {
-        document.getElementById('rollbackList').innerHTML = '<div class="rollback-empty">되돌릴 개정 내역이 없습니다</div>';
-      }
-    }, 300);
+    var row = btn.closest('.log-row');
+    if (row) {
+      row.style.transition = 'opacity 0.3s, transform 0.3s';
+      row.style.opacity = '0';
+      row.style.transform = 'translateX(20px)';
+      setTimeout(function() {
+        row.remove();
+        var rollList = document.getElementById('rollbackList');
+        if (rollList && !rollList.querySelector('.log-row')) {
+          rollList.innerHTML = '<div class="log-empty">📭 활동 내역이 없습니다</div>';
+        }
+      }, 300);
+    }
     if (revRules !== null) { revRules = null; loadRevRules(); }
-  } catch(e) { alert('되돌리기 실패: ' + e.message); btn.disabled = false; btn.textContent = '되돌리기'; }
+  } catch(e) { alert('되돌리기 실패: ' + e.message); btn.disabled = false; btn.textContent = '↩️'; }
 }
+// 활동 로그에서 업로드 활동 삭제 (= 해당 규정의 청크/파일 모두 제거)
+async function doDeleteUploadFromLog(filename, btn) {
+  if (!confirm('"' + filename + '"\n\n업로드된 규정을 DB와 파일 모두 삭제하시겠습니까?')) return;
+  btn.disabled = true; btn.textContent = '⏳';
+  try {
+    var res = await fetch('/uploaded-rules/' + encodeURIComponent(filename), {
+      method: 'DELETE', headers: { 'Authorization': 'Bearer ' + token }
+    });
+    var data = await res.json();
+    if (!res.ok) throw new Error(data.detail || '삭제 실패');
+    var row = btn.closest('.log-row');
+    if (row) {
+      row.style.transition = 'opacity 0.3s, transform 0.3s';
+      row.style.opacity = '0';
+      row.style.transform = 'translateX(20px)';
+      setTimeout(function() {
+        row.remove();
+        var rollList = document.getElementById('rollbackList');
+        if (rollList && !rollList.querySelector('.log-row')) {
+          rollList.innerHTML = '<div class="log-empty">📭 활동 내역이 없습니다</div>';
+        }
+      }, 300);
+    }
+  } catch(e) { alert('삭제 실패: ' + e.message); btn.disabled = false; btn.textContent = '🗑'; }
+}
+// 활동 로그 사이드바 토글
+function toggleActivityLog() {
+  var sb = document.getElementById('activityLog');
+  sb.classList.toggle('collapsed');
+  document.body.classList.toggle('log-collapsed', sb.classList.contains('collapsed'));
+  try { localStorage.setItem('hsu_log_collapsed', sb.classList.contains('collapsed') ? '1' : '0'); } catch(_){}
+}
+// 페이지 로드 시 이전 상태 복원
+(function() {
+  try {
+    if (localStorage.getItem('hsu_log_collapsed') === '1') {
+      var sb = document.getElementById('activityLog');
+      if (sb) { sb.classList.add('collapsed'); document.body.classList.add('log-collapsed'); }
+    }
+  } catch(_){}
+})();
 
 var bulkData = null;
 function bulkEsc(s) {
@@ -1350,7 +1611,7 @@ function renderBulkPreview() {
     var more = r.count > r.hits.length
       ? '<div class="bulk-hit" style="color:#B0BDD4">… 외 ' + (r.count - r.hits.length) + '곳 더</div>' : '';
     return '<div class="bulk-rule"><div class="bulk-rule-head" onclick="toggleBulkHits(' + i + ',event)">' +
-      '<input type="checkbox" class="bulk-rule-cb" id="bulkcb-' + i + '" data-seq="' + r.seq + '" checked onclick="event.stopPropagation()">' +
+      '<input type="checkbox" class="bulk-rule-cb" id="bulkcb-' + i + '" data-seq="' + r.seq + '" checked onclick="event.stopPropagation(); updateBulkApplyCount()">' +
       '<span class="bulk-rule-name">' + bulkEsc(r.title) + '</span>' +
       '<span class="bulk-rule-cnt">' + r.count + '곳</span>' +
       '<span class="bulk-rule-toggle" id="bulktg-' + i + '">▸ 펼치기</span></div>' +
@@ -1358,11 +1619,20 @@ function renderBulkPreview() {
   }).join('');
   el.innerHTML =
     '<div class="bulk-summary">\'' + bulkEsc(d.old_word) + '\' → \'' + bulkEsc(d.new_word) + '\' · ' + d.rule_count + '개 규정, 총 ' + d.total_hits + '곳</div>' +
+    '<div class="bulk-hint" style="margin-bottom:10px;padding:10px 14px;background:#F4F8FE;border-radius:8px;font-size:12.5px;color:var(--blue);">' +
+      '💡 기본적으로 <b>모든 규정이 적용 대상</b>으로 체크돼 있습니다. <b>제외하고 싶은 규정만 체크 해제</b>한 뒤 아래 버튼을 누르세요.' +
+    '</div>' +
     '<div class="bulk-list">' + rows + '</div>' +
     '<div class="bulk-actions">' +
       '<span class="bulk-checkall" onclick="bulkCheckAll(true)">전체 선택</span>' +
       '<span class="bulk-checkall" onclick="bulkCheckAll(false)">전체 해제</span>' +
-      '<button class="bulk-apply" id="bulkApplyBtn" onclick="doBulkApply()">✅ 선택한 규정에 일괄 적용</button></div>';
+      '<button class="bulk-apply" id="bulkApplyBtn" onclick="doBulkApply()">✅ 체크된 ' + d.rule_count + '개 규정에 적용</button></div>';
+}
+function updateBulkApplyCount() {
+  var cnt = 0;
+  document.querySelectorAll('.bulk-rule-cb').forEach(function(cb) { if (cb.checked) cnt++; });
+  var btn = document.getElementById('bulkApplyBtn');
+  if (btn) btn.textContent = '✅ 체크된 ' + cnt + '개 규정에 적용';
 }
 function toggleBulkHits(i, ev) {
   var box = document.getElementById('bulkhits-' + i);
@@ -1370,7 +1640,10 @@ function toggleBulkHits(i, ev) {
   var open = box.classList.toggle('open');
   tg.textContent = open ? '▾ 접기' : '▸ 펼치기';
 }
-function bulkCheckAll(state) { document.querySelectorAll('.bulk-rule-cb').forEach(function(cb) { cb.checked = state; }); }
+function bulkCheckAll(state) {
+  document.querySelectorAll('.bulk-rule-cb').forEach(function(cb) { cb.checked = state; });
+  updateBulkApplyCount();
+}
 async function doBulkApply() {
   if (!bulkData) return;
   var seqs = [];
@@ -1405,6 +1678,296 @@ async function doBulkApply() {
     msg.className = 'summary-msg err';
     msg.textContent = '❌ ' + e.message;
     btn.disabled = false; btn.textContent = '✅ 선택한 규정에 일괄 적용';
+  }
+}
+
+// ════════════════ 회의록 기반 AI 개정 ════════════════
+var meetingFile = null;
+var meetingItems = null;
+var meetingInputMode = 'file';   // 'file' | 'text'
+var mmPickedRule = null;          // 직접 입력 시 사용자가 선택한 규정 {seq, title}
+
+function setMeetingInputMode(mode) {
+  meetingInputMode = mode;
+  document.getElementById('mmTabFile').classList.toggle('active', mode === 'file');
+  document.getElementById('mmTabText').classList.toggle('active', mode === 'text');
+  document.getElementById('mmInputFile').style.display = (mode === 'file') ? 'block' : 'none';
+  document.getElementById('mmInputText').style.display = (mode === 'text') ? 'block' : 'none';
+  updateMeetingAnalyzeBtn();
+}
+function updateMeetingAnalyzeBtn() {
+  var btn = document.getElementById('meetingAnalyzeBtn');
+  if (!btn) return;
+  if (meetingInputMode === 'file') {
+    btn.disabled = !meetingFile;
+  } else {
+    var txt = (document.getElementById('mmTextarea').value || '').trim();
+    btn.disabled = txt.length < 10;
+  }
+}
+
+function handleMeetingDrop(ev) {
+  ev.preventDefault();
+  var dz = document.getElementById('meetingZone');
+  dz.classList.remove('drag');
+  var f = ev.dataTransfer.files && ev.dataTransfer.files[0];
+  if (f) { document.getElementById('meetingFile').files = ev.dataTransfer.files; onMeetingFileChosen(document.getElementById('meetingFile')); }
+}
+function onMeetingFileChosen(input) {
+  var f = input.files && input.files[0];
+  if (!f) return;
+  meetingFile = f;
+  document.getElementById('meetingFileName').textContent = '📎 ' + f.name;
+  updateMeetingAnalyzeBtn();
+}
+
+// 직접 입력 — 규정 검색/선택
+function renderMmRuleList() {
+  var q = (document.getElementById('mmRuleSearch').value || '').trim().toLowerCase();
+  var listEl = document.getElementById('mmRuleList');
+  if (!q || q.length < 1) { listEl.classList.remove('open'); listEl.innerHTML = ''; return; }
+  // revRules가 로드 안 됐으면 로드
+  if (revRules === null) { loadRevRules().then(renderMmRuleList); return; }
+  var hits = (revRules || []).filter(function(r) {
+    return (r.title || '').toLowerCase().indexOf(q) !== -1;
+  }).slice(0, 30);
+  if (hits.length === 0) {
+    listEl.innerHTML = '<div class="mm-rule-list-empty">검색 결과 없음</div>';
+  } else {
+    listEl.innerHTML = hits.map(function(r) {
+      return '<div class="mm-rule-list-item" onclick="pickMmRule(' + r.seq + ',\'' +
+        (r.title || '').replace(/'/g, "\\'") + '\')">' + escapeHtml(r.title || '') + '</div>';
+    }).join('');
+  }
+  listEl.classList.add('open');
+}
+function pickMmRule(seq, title) {
+  mmPickedRule = { seq: seq, title: title };
+  document.getElementById('mmRulePicked').style.display = 'flex';
+  document.getElementById('mmRulePicked').innerHTML =
+    '📌 ' + escapeHtml(title) + '<span class="mm-rule-clear" onclick="clearMmRule()" title="해제">✕</span>';
+  document.getElementById('mmRuleSearch').value = '';
+  document.getElementById('mmRuleList').classList.remove('open');
+}
+function clearMmRule() {
+  mmPickedRule = null;
+  document.getElementById('mmRulePicked').style.display = 'none';
+  document.getElementById('mmRulePicked').innerHTML = '';
+}
+
+// 텍스트 변경 시 분석 버튼 활성/비활성
+document.addEventListener('DOMContentLoaded', function() {
+  var ta = document.getElementById('mmTextarea');
+  if (ta) ta.addEventListener('input', updateMeetingAnalyzeBtn);
+});
+
+async function doMeetingAnalyze() {
+  var btn = document.getElementById('meetingAnalyzeBtn');
+  var msg = document.getElementById('meetingSummaryMsg');
+  msg.className = 'summary-msg'; msg.textContent = '';
+  btn.disabled = true; btn.textContent = '🤖 AI 분석 중... (10~30초)';
+  document.getElementById('meetingResult').innerHTML =
+    '<div class="rev-list-empty"><div class="spinner"></div>회의록을 분석하고 있습니다...</div>';
+  try {
+    var res;
+    if (meetingInputMode === 'file') {
+      if (!meetingFile) { alert('회의자료 파일을 선택하세요.'); return; }
+      var fd = new FormData();
+      fd.append('file', meetingFile);
+      res = await fetch('/extract-meeting-revisions', {
+        method: 'POST', headers: { 'Authorization': 'Bearer ' + token }, body: fd
+      });
+    } else {
+      var txt = (document.getElementById('mmTextarea').value || '').trim();
+      if (txt.length < 10) { alert('회의록 내용이 너무 짧습니다.'); return; }
+      var fd = new FormData();
+      fd.append('text', txt);
+      fd.append('target_seq', mmPickedRule ? mmPickedRule.seq : -1);
+      res = await fetch('/extract-meeting-revisions-text', {
+        method: 'POST', headers: { 'Authorization': 'Bearer ' + token }, body: fd
+      });
+    }
+    if (res.status === 401) { localStorage.removeItem('hsu_token'); window.location.href='/login-page'; return; }
+    var data = await res.json();
+    if (!res.ok) throw new Error(data.detail || '분석 실패');
+    meetingItems = data.items || [];
+    renderMeetingResult(data);
+  } catch(e) {
+    document.getElementById('meetingResult').innerHTML = '';
+    msg.className = 'summary-msg err';
+    msg.textContent = '❌ ' + e.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🤖 AI로 안건 추출';
+    updateMeetingAnalyzeBtn();
+  }
+}
+function renderMeetingResult(data) {
+  var el = document.getElementById('meetingResult');
+  var items = data.items || [];
+  if (data.ai_error) {
+    el.innerHTML = '<div class="rev-list-empty">AI 응답 파싱 실패: ' + bulkEsc(data.ai_error) + '</div>';
+    return;
+  }
+  if (items.length === 0) {
+    el.innerHTML = '<div class="rev-list-empty">회의록에서 규정 개정 안건을 찾지 못했습니다.</div>';
+    return;
+  }
+  var matched = items.filter(function(it) { return it.matched; }).length;
+  var summaryText;
+  if (items.length === 0) {
+    summaryText = '추출된 안건이 없습니다';
+  } else if (matched === items.length) {
+    summaryText = '✓ 안건 ' + items.length + '건 추출 · 모두 매칭 성공';
+  } else {
+    summaryText = '안건 ' + items.length + '건 추출 · 매칭 ' + matched + '건';
+  }
+  var html = '<div class="meeting-summary">' + summaryText + '</div>';
+  html += items.map(function(it, i) {
+    var conf = (it.match_confidence || 'medium');
+    var confLabel = { high: '높음', medium: '보통', low: '낮음' }[conf] || '보통';
+    var unmatched = !it.matched;
+    var ruleResolved = it.rule_seq != null && it.rule_seq >= 0;
+    // 케이스 구분: (1) 규정 매칭 실패 (2) 규정은 매칭됐는데 개정안 본문 없음 (3) 정상
+    var skipReason = '';
+    if (unmatched) {
+      if (!ruleResolved) {
+        skipReason = '⚠ 현재 등록된 규정과 매칭되지 않아 적용할 수 없습니다.';
+      } else if (!it.new_text || it.new_text.length < 5) {
+        skipReason = '⚠ 개정안 본문을 추출하지 못해 적용할 수 없습니다. (회의록을 직접 보고 규정 개정 탭에서 수동 입력해주세요)';
+      } else if (it.scope === 'article' && (it.article_index == null || it.article_index < 0)) {
+        skipReason = '⚠ 회의록의 조 번호가 현재 규정과 매칭되지 않습니다.';
+      } else {
+        skipReason = '⚠ 적용할 수 없는 항목입니다.';
+      }
+    }
+    var titleLine =
+      '<div class="meeting-item-head">' +
+        '<span class="meeting-item-title">' + bulkEsc(it.rule_title || '(규정 미특정)') + '</span>' +
+        '<span class="meeting-conf ' + conf + '">매칭 ' + confLabel + '</span>' +
+      '</div>';
+    var changeCount = (it.changed_articles && it.changed_articles.length) || 0;
+    var artLine = it.article_head
+      ? '<div class="meeting-art">📌 ' + bulkEsc(it.article_head) + '</div>'
+      : (changeCount > 0
+          ? '<div class="meeting-art">📌 전체 규정 개정 — ' + changeCount + '개 조 변경/신설</div>'
+          : '<div class="meeting-art">📌 전체 규정 개정</div>');
+    var reasonLine = it.reason
+      ? '<div class="meeting-reason">💡 ' + bulkEsc(it.reason) + '</div>'
+      : '';
+    // note가 "변경/신설: ..." 라벨이면 다른 톤(정보)으로, 진짜 경고는 빨강
+    var noteLine = '';
+    if (it.note) {
+      var isInfo = it.note.indexOf('변경/신설') === 0 || it.note.indexOf('변경 사항 없음') === 0;
+      noteLine = isInfo
+        ? '<div class="meeting-change-list">' + bulkEsc(it.note) + '</div>'
+        : '<div class="meeting-note">⚠ ' + bulkEsc(it.note) + '</div>';
+    }
+    var actions;
+    if (unmatched && (!it.new_text || it.new_text.length < 5)) {
+      // 본문도 없으면 그냥 skip 메시지만
+      actions = '<div class="meeting-actions"><span class="meeting-skip">' + skipReason + '</span></div>';
+    } else {
+      // AI가 추출한 개정안 본문을 펼쳐 볼 수 있게 + 직접 수정 가능
+      var bodyId = 'mi-body-' + i;
+      var taId   = 'mi-ta-' + i;
+      var lineCount = ((it.new_text || '').match(/\n/g) || []).length + 1;
+      actions =
+        '<div class="mi-body-wrap">' +
+          '<div class="mi-body-head" onclick="toggleMiBody(' + i + ')">' +
+            '<span id="' + bodyId + '-tg">▸</span> AI가 추출한 개정안 본문 보기·수정 ' +
+            '<span class="mi-body-meta">(' + (it.new_text || '').length + '자, ' + lineCount + '줄)</span>' +
+          '</div>' +
+          '<div class="mi-body-box" id="' + bodyId + '" style="display:none">' +
+            '<textarea class="mi-body-ta" id="' + taId + '" oninput="onMiEdit(' + i + ')">' +
+              bulkEsc(it.new_text || '') +
+            '</textarea>' +
+            '<div class="mi-body-hint">💡 위 내용이 회의록과 다르거나 잘못 추출됐다면 직접 수정한 뒤 미리보기를 눌러주세요.</div>' +
+          '</div>' +
+        '</div>';
+      if (unmatched) {
+        actions += '<div class="meeting-actions"><span class="meeting-skip">' + skipReason + '</span></div>';
+      } else {
+        actions += '<div class="meeting-actions">' +
+          '<button class="meeting-preview-btn" onclick="doMeetingPreview(' + i + ')">🔍 미리보기</button>' +
+          '</div>';
+      }
+    }
+    var classes = 'meeting-item';
+    if (unmatched) classes += ' unmatched';
+    if (it.echo_warn) classes += ' echo-warn';
+    // echo_warn이면 본문 영역을 기본 펼침
+    var autoOpen = it.echo_warn ? 'block' : 'none';
+    var openTriangle = it.echo_warn ? '▾' : '▸';
+    return '<div class="' + classes + '">' +
+      titleLine + artLine + reasonLine + noteLine + actions + '</div>';
+  }).join('');
+  el.innerHTML = html;
+  // echo_warn 카드는 본문 영역 자동 펼치기
+  items.forEach(function(it, i) {
+    if (it.echo_warn) {
+      var box = document.getElementById('mi-body-' + i);
+      var tg = document.getElementById('mi-body-' + i + '-tg');
+      if (box) box.style.display = 'block';
+      if (tg) tg.textContent = '▾';
+    }
+  });
+}
+function toggleMiBody(i) {
+  var box = document.getElementById('mi-body-' + i);
+  var tg = document.getElementById('mi-body-' + i + '-tg');
+  if (!box) return;
+  var open = box.style.display === 'none';
+  box.style.display = open ? 'block' : 'none';
+  if (tg) tg.textContent = open ? '▾' : '▸';
+}
+function onMiEdit(i) {
+  // textarea 내용 → meetingItems[i].new_text 동기화
+  var ta = document.getElementById('mi-ta-' + i);
+  if (!ta || !meetingItems || !meetingItems[i]) return;
+  meetingItems[i].new_text = ta.value;
+  // 미리보기 버튼 활성/비활성 상태 갱신
+  var card = ta.closest('.meeting-item');
+  if (card) {
+    var btn = card.querySelector('.meeting-preview-btn');
+    if (btn) btn.disabled = (ta.value.trim().length < 5);
+  }
+}
+async function doMeetingPreview(i) {
+  if (!meetingItems || !meetingItems[i]) return;
+  var it = meetingItems[i];
+  if (!it.matched) { alert('매칭되지 않은 항목은 미리볼 수 없습니다.'); return; }
+  if (!it.new_text || it.new_text.length < 5) { alert('개정안 본문이 비어있습니다.'); return; }
+
+  var msg = document.getElementById('meetingSummaryMsg');
+  msg.className = 'summary-msg'; msg.textContent = '⏳ 미리보기 준비 중...';
+  try {
+    var form = new FormData();
+    var endpoint;
+    if (it.scope === 'article' && it.article_index >= 0) {
+      endpoint = '/revise-article-preview';
+      form.append('seq', it.rule_seq);
+      form.append('index', it.article_index);
+      form.append('text', it.new_text);
+    } else {
+      // 전체 개정
+      endpoint = '/revise-preview';
+      form.append('seq', it.rule_seq);
+      form.append('text', it.new_text);
+      // /revise-preview는 extract_method 파라미터를 받지 않음 — 보낼 필요 없음
+    }
+    var res = await fetch(endpoint, {
+      method: 'POST', headers: { 'Authorization': 'Bearer ' + token }, body: form
+    });
+    if (res.status === 401) { localStorage.removeItem('hsu_token'); window.location.href='/login-page'; return; }
+    var data = await res.json();
+    if (!res.ok) throw new Error(data.detail || '미리보기 실패');
+    msg.textContent = '';
+    // 기존 글자 단위 diff 모달 그대로 재사용 — 적용 후 활동 로그 갱신
+    openReviseDiffModal(data, form, it.scope === 'article' ? 'article' : 'all');
+  } catch(e) {
+    msg.className = 'summary-msg err';
+    msg.textContent = '❌ ' + e.message;
   }
 }
 

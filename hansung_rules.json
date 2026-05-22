@@ -162,7 +162,25 @@
         "filename": "완81) 3-1-14 구매규정.hwp"
       }
     ],
-    "url": "https://rule.hansung.ac.kr/lmxsrv/law/lawFullView.do?SEQ=28&SEQ_HISTORY=1545"
+    "url": "https://rule.hansung.ac.kr/lmxsrv/law/lawFullView.do?SEQ=28&SEQ_HISTORY=1545",
+    "revisions": [
+      {
+        "kind": "bulk_replace",
+        "old_word": "총무인사",
+        "new_word": "메롱",
+        "replaced": 10,
+        "revised_at": "2026-05-22",
+        "backup_id": "bulk_20260522_153007"
+      },
+      {
+        "kind": "bulk_replace",
+        "old_word": "메롱",
+        "new_word": "총무인사",
+        "replaced": 10,
+        "revised_at": "2026-05-22",
+        "backup_id": "bulk_20260522_153119"
+      }
+    ]
   },
   {
     "seq": 29,
@@ -192,7 +210,25 @@
         "filename": "3-1-16 검수규정.hwp"
       }
     ],
-    "url": "https://rule.hansung.ac.kr/lmxsrv/law/lawFullView.do?SEQ=30&SEQ_HISTORY=1110"
+    "url": "https://rule.hansung.ac.kr/lmxsrv/law/lawFullView.do?SEQ=30&SEQ_HISTORY=1110",
+    "revisions": [
+      {
+        "kind": "bulk_replace",
+        "old_word": "총무인사",
+        "new_word": "메롱",
+        "replaced": 3,
+        "revised_at": "2026-05-22",
+        "backup_id": "bulk_20260522_153007"
+      },
+      {
+        "kind": "bulk_replace",
+        "old_word": "메롱",
+        "new_word": "총무인사",
+        "replaced": 3,
+        "revised_at": "2026-05-22",
+        "backup_id": "bulk_20260522_153119"
+      }
+    ]
   },
   {
     "seq": 31,
@@ -222,7 +258,25 @@
         "filename": "완84) 3-1-18 시설관리규정.hwp"
       }
     ],
-    "url": "https://rule.hansung.ac.kr/lmxsrv/law/lawFullView.do?SEQ=32&SEQ_HISTORY=1548"
+    "url": "https://rule.hansung.ac.kr/lmxsrv/law/lawFullView.do?SEQ=32&SEQ_HISTORY=1548",
+    "revisions": [
+      {
+        "kind": "bulk_replace",
+        "old_word": "총무인사",
+        "new_word": "메롱",
+        "replaced": 1,
+        "revised_at": "2026-05-22",
+        "backup_id": "bulk_20260522_153007"
+      },
+      {
+        "kind": "bulk_replace",
+        "old_word": "메롱",
+        "new_word": "총무인사",
+        "replaced": 1,
+        "revised_at": "2026-05-22",
+        "backup_id": "bulk_20260522_153119"
+      }
+    ]
   },
   {
     "seq": 33,
@@ -237,7 +291,25 @@
         "filename": "3-1-2 직제규정.hwp"
       }
     ],
-    "url": "https://rule.hansung.ac.kr/lmxsrv/law/lawFullView.do?SEQ=33&SEQ_HISTORY=1641"
+    "url": "https://rule.hansung.ac.kr/lmxsrv/law/lawFullView.do?SEQ=33&SEQ_HISTORY=1641",
+    "revisions": [
+      {
+        "kind": "bulk_replace",
+        "old_word": "총무인사",
+        "new_word": "메롱",
+        "replaced": 1,
+        "revised_at": "2026-05-22",
+        "backup_id": "bulk_20260522_153007"
+      },
+      {
+        "kind": "bulk_replace",
+        "old_word": "메롱",
+        "new_word": "총무인사",
+        "replaced": 1,
+        "revised_at": "2026-05-22",
+        "backup_id": "bulk_20260522_153119"
+      }
+    ]
   },
   {
     "seq": 34,
@@ -252,7 +324,25 @@
         "filename": "3-1-21 차량관리규정_20030819.hwp"
       }
     ],
-    "url": "https://rule.hansung.ac.kr/lmxsrv/law/lawFullView.do?SEQ=34&SEQ_HISTORY=18"
+    "url": "https://rule.hansung.ac.kr/lmxsrv/law/lawFullView.do?SEQ=34&SEQ_HISTORY=18",
+    "revisions": [
+      {
+        "kind": "bulk_replace",
+        "old_word": "총무인사",
+        "new_word": "메롱",
+        "replaced": 4,
+        "revised_at": "2026-05-22",
+        "backup_id": "bulk_20260522_153007"
+      },
+      {
+        "kind": "bulk_replace",
+        "old_word": "메롱",
+        "new_word": "총무인사",
+        "replaced": 4,
+        "revised_at": "2026-05-22",
+        "backup_id": "bulk_20260522_153119"
+      }
+    ]
   },
   {
     "seq": 35,
@@ -297,7 +387,25 @@
         "filename": "3-1-26 차량관리내규_20130601.hwp"
       }
     ],
-    "url": "https://rule.hansung.ac.kr/lmxsrv/law/lawFullView.do?SEQ=37&SEQ_HISTORY=22"
+    "url": "https://rule.hansung.ac.kr/lmxsrv/law/lawFullView.do?SEQ=37&SEQ_HISTORY=22",
+    "revisions": [
+      {
+        "kind": "bulk_replace",
+        "old_word": "총무인사",
+        "new_word": "메롱",
+        "replaced": 1,
+        "revised_at": "2026-05-22",
+        "backup_id": "bulk_20260522_153007"
+      },
+      {
+        "kind": "bulk_replace",
+        "old_word": "메롱",
+        "new_word": "총무인사",
+        "replaced": 1,
+        "revised_at": "2026-05-22",
+        "backup_id": "bulk_20260522_153119"
+      }
+    ]
   },
   {
     "seq": 38,
@@ -312,7 +420,25 @@
         "filename": "3-1-3 사무분장규정.hwp"
       }
     ],
-    "url": "https://rule.hansung.ac.kr/lmxsrv/law/lawFullView.do?SEQ=38&SEQ_HISTORY=1634"
+    "url": "https://rule.hansung.ac.kr/lmxsrv/law/lawFullView.do?SEQ=38&SEQ_HISTORY=1634",
+    "revisions": [
+      {
+        "kind": "bulk_replace",
+        "old_word": "총무인사",
+        "new_word": "메롱",
+        "replaced": 3,
+        "revised_at": "2026-05-22",
+        "backup_id": "bulk_20260522_153007"
+      },
+      {
+        "kind": "bulk_replace",
+        "old_word": "메롱",
+        "new_word": "총무인사",
+        "replaced": 3,
+        "revised_at": "2026-05-22",
+        "backup_id": "bulk_20260522_153119"
+      }
+    ]
   },
   {
     "seq": 39,
@@ -387,7 +513,25 @@
         "filename": "완93) 3-1-36 시설물사용에 관한 내규.hwp"
       }
     ],
-    "url": "https://rule.hansung.ac.kr/lmxsrv/law/lawFullView.do?SEQ=43&SEQ_HISTORY=1557"
+    "url": "https://rule.hansung.ac.kr/lmxsrv/law/lawFullView.do?SEQ=43&SEQ_HISTORY=1557",
+    "revisions": [
+      {
+        "kind": "bulk_replace",
+        "old_word": "총무인사",
+        "new_word": "메롱",
+        "replaced": 2,
+        "revised_at": "2026-05-22",
+        "backup_id": "bulk_20260522_153007"
+      },
+      {
+        "kind": "bulk_replace",
+        "old_word": "메롱",
+        "new_word": "총무인사",
+        "replaced": 2,
+        "revised_at": "2026-05-22",
+        "backup_id": "bulk_20260522_153119"
+      }
+    ]
   },
   {
     "seq": 44,
@@ -462,7 +606,25 @@
         "filename": "3-1-41 보안시스템 개인정보관리 운영규정_20161108.hwp"
       }
     ],
-    "url": "https://rule.hansung.ac.kr/lmxsrv/law/lawFullView.do?SEQ=48&SEQ_HISTORY=35"
+    "url": "https://rule.hansung.ac.kr/lmxsrv/law/lawFullView.do?SEQ=48&SEQ_HISTORY=35",
+    "revisions": [
+      {
+        "kind": "bulk_replace",
+        "old_word": "총무인사",
+        "new_word": "메롱",
+        "replaced": 2,
+        "revised_at": "2026-05-22",
+        "backup_id": "bulk_20260522_153007"
+      },
+      {
+        "kind": "bulk_replace",
+        "old_word": "메롱",
+        "new_word": "총무인사",
+        "replaced": 2,
+        "revised_at": "2026-05-22",
+        "backup_id": "bulk_20260522_153119"
+      }
+    ]
   },
   {
     "seq": 49,
@@ -507,7 +669,25 @@
         "filename": "완33) 3-1-46 한성발전공헌에 대한 포상 규정.hwp"
       }
     ],
-    "url": "https://rule.hansung.ac.kr/lmxsrv/law/lawFullView.do?SEQ=51&SEQ_HISTORY=1499"
+    "url": "https://rule.hansung.ac.kr/lmxsrv/law/lawFullView.do?SEQ=51&SEQ_HISTORY=1499",
+    "revisions": [
+      {
+        "kind": "bulk_replace",
+        "old_word": "총무인사",
+        "new_word": "메롱",
+        "replaced": 1,
+        "revised_at": "2026-05-22",
+        "backup_id": "bulk_20260522_153007"
+      },
+      {
+        "kind": "bulk_replace",
+        "old_word": "메롱",
+        "new_word": "총무인사",
+        "replaced": 1,
+        "revised_at": "2026-05-22",
+        "backup_id": "bulk_20260522_153119"
+      }
+    ]
   },
   {
     "seq": 52,
@@ -567,7 +747,25 @@
         "filename": "3-1-5 문서규정.hwp"
       }
     ],
-    "url": "https://rule.hansung.ac.kr/lmxsrv/law/lawFullView.do?SEQ=55&SEQ_HISTORY=1321"
+    "url": "https://rule.hansung.ac.kr/lmxsrv/law/lawFullView.do?SEQ=55&SEQ_HISTORY=1321",
+    "revisions": [
+      {
+        "kind": "bulk_replace",
+        "old_word": "총무인사",
+        "new_word": "메롱",
+        "replaced": 8,
+        "revised_at": "2026-05-22",
+        "backup_id": "bulk_20260522_153007"
+      },
+      {
+        "kind": "bulk_replace",
+        "old_word": "메롱",
+        "new_word": "총무인사",
+        "replaced": 8,
+        "revised_at": "2026-05-22",
+        "backup_id": "bulk_20260522_153119"
+      }
+    ]
   },
   {
     "seq": 56,
@@ -672,7 +870,25 @@
         "filename": "3-1-59 보안업무규정.hwp"
       }
     ],
-    "url": "https://rule.hansung.ac.kr/lmxsrv/law/lawFullView.do?SEQ=62&SEQ_HISTORY=1556"
+    "url": "https://rule.hansung.ac.kr/lmxsrv/law/lawFullView.do?SEQ=62&SEQ_HISTORY=1556",
+    "revisions": [
+      {
+        "kind": "bulk_replace",
+        "old_word": "총무인사",
+        "new_word": "메롱",
+        "replaced": 12,
+        "revised_at": "2026-05-22",
+        "backup_id": "bulk_20260522_153007"
+      },
+      {
+        "kind": "bulk_replace",
+        "old_word": "메롱",
+        "new_word": "총무인사",
+        "replaced": 12,
+        "revised_at": "2026-05-22",
+        "backup_id": "bulk_20260522_153119"
+      }
+    ]
   },
   {
     "seq": 63,
@@ -852,7 +1068,25 @@
         "filename": "완27) 3-2-17 조교에 관한 규정.hwp"
       }
     ],
-    "url": "https://rule.hansung.ac.kr/lmxsrv/law/lawFullView.do?SEQ=74&SEQ_HISTORY=1493"
+    "url": "https://rule.hansung.ac.kr/lmxsrv/law/lawFullView.do?SEQ=74&SEQ_HISTORY=1493",
+    "revisions": [
+      {
+        "kind": "bulk_replace",
+        "old_word": "총무인사",
+        "new_word": "메롱",
+        "replaced": 3,
+        "revised_at": "2026-05-22",
+        "backup_id": "bulk_20260522_153007"
+      },
+      {
+        "kind": "bulk_replace",
+        "old_word": "메롱",
+        "new_word": "총무인사",
+        "replaced": 3,
+        "revised_at": "2026-05-22",
+        "backup_id": "bulk_20260522_153119"
+      }
+    ]
   },
   {
     "seq": 75,
@@ -867,7 +1101,25 @@
         "filename": "완7) 3-2-18 교직원 명예퇴직 및 수당 지급에 관한 규정.hwp"
       }
     ],
-    "url": "https://rule.hansung.ac.kr/lmxsrv/law/lawFullView.do?SEQ=75&SEQ_HISTORY=1473"
+    "url": "https://rule.hansung.ac.kr/lmxsrv/law/lawFullView.do?SEQ=75&SEQ_HISTORY=1473",
+    "revisions": [
+      {
+        "kind": "bulk_replace",
+        "old_word": "총무인사",
+        "new_word": "메롱",
+        "replaced": 1,
+        "revised_at": "2026-05-22",
+        "backup_id": "bulk_20260522_153007"
+      },
+      {
+        "kind": "bulk_replace",
+        "old_word": "메롱",
+        "new_word": "총무인사",
+        "replaced": 1,
+        "revised_at": "2026-05-22",
+        "backup_id": "bulk_20260522_153119"
+      }
+    ]
   },
   {
     "seq": 76,
@@ -927,7 +1179,25 @@
         "filename": "3-2-21 직원포상규정_20200325.hwp"
       }
     ],
-    "url": "https://rule.hansung.ac.kr/lmxsrv/law/lawFullView.do?SEQ=79&SEQ_HISTORY=81"
+    "url": "https://rule.hansung.ac.kr/lmxsrv/law/lawFullView.do?SEQ=79&SEQ_HISTORY=81",
+    "revisions": [
+      {
+        "kind": "bulk_replace",
+        "old_word": "총무인사",
+        "new_word": "메롱",
+        "replaced": 1,
+        "revised_at": "2026-05-22",
+        "backup_id": "bulk_20260522_153007"
+      },
+      {
+        "kind": "bulk_replace",
+        "old_word": "메롱",
+        "new_word": "총무인사",
+        "replaced": 1,
+        "revised_at": "2026-05-22",
+        "backup_id": "bulk_20260522_153119"
+      }
+    ]
   },
   {
     "seq": 80,
@@ -1002,7 +1272,25 @@
         "filename": "3-2-26 직원징계규정_20151027.hwp"
       }
     ],
-    "url": "https://rule.hansung.ac.kr/lmxsrv/law/lawFullView.do?SEQ=84&SEQ_HISTORY=89"
+    "url": "https://rule.hansung.ac.kr/lmxsrv/law/lawFullView.do?SEQ=84&SEQ_HISTORY=89",
+    "revisions": [
+      {
+        "kind": "bulk_replace",
+        "old_word": "총무인사",
+        "new_word": "메롱",
+        "replaced": 1,
+        "revised_at": "2026-05-22",
+        "backup_id": "bulk_20260522_153007"
+      },
+      {
+        "kind": "bulk_replace",
+        "old_word": "메롱",
+        "new_word": "총무인사",
+        "replaced": 1,
+        "revised_at": "2026-05-22",
+        "backup_id": "bulk_20260522_153119"
+      }
+    ]
   },
   {
     "seq": 85,
@@ -1017,7 +1305,25 @@
         "filename": "3-2-27 계약직원평정내규.hwp"
       }
     ],
-    "url": "https://rule.hansung.ac.kr/lmxsrv/law/lawFullView.do?SEQ=85&SEQ_HISTORY=1584"
+    "url": "https://rule.hansung.ac.kr/lmxsrv/law/lawFullView.do?SEQ=85&SEQ_HISTORY=1584",
+    "revisions": [
+      {
+        "kind": "bulk_replace",
+        "old_word": "총무인사",
+        "new_word": "메롱",
+        "replaced": 2,
+        "revised_at": "2026-05-22",
+        "backup_id": "bulk_20260522_153007"
+      },
+      {
+        "kind": "bulk_replace",
+        "old_word": "메롱",
+        "new_word": "총무인사",
+        "replaced": 2,
+        "revised_at": "2026-05-22",
+        "backup_id": "bulk_20260522_153119"
+      }
+    ]
   },
   {
     "seq": 86,
@@ -1197,7 +1503,25 @@
         "filename": "3-2-39 직장 내 괴롭힘 예방 및 대응 규정.hwp"
       }
     ],
-    "url": "https://rule.hansung.ac.kr/lmxsrv/law/lawFullView.do?SEQ=97&SEQ_HISTORY=832"
+    "url": "https://rule.hansung.ac.kr/lmxsrv/law/lawFullView.do?SEQ=97&SEQ_HISTORY=832",
+    "revisions": [
+      {
+        "kind": "bulk_replace",
+        "old_word": "총무인사",
+        "new_word": "메롱",
+        "replaced": 5,
+        "revised_at": "2026-05-22",
+        "backup_id": "bulk_20260522_153007"
+      },
+      {
+        "kind": "bulk_replace",
+        "old_word": "메롱",
+        "new_word": "총무인사",
+        "replaced": 5,
+        "revised_at": "2026-05-22",
+        "backup_id": "bulk_20260522_153119"
+      }
+    ]
   },
   {
     "seq": 98,
@@ -1242,7 +1566,25 @@
         "filename": "3-2-5 직원복무규정.hwp"
       }
     ],
-    "url": "https://rule.hansung.ac.kr/lmxsrv/law/lawFullView.do?SEQ=100&SEQ_HISTORY=1387"
+    "url": "https://rule.hansung.ac.kr/lmxsrv/law/lawFullView.do?SEQ=100&SEQ_HISTORY=1387",
+    "revisions": [
+      {
+        "kind": "bulk_replace",
+        "old_word": "총무인사",
+        "new_word": "메롱",
+        "replaced": 3,
+        "revised_at": "2026-05-22",
+        "backup_id": "bulk_20260522_153007"
+      },
+      {
+        "kind": "bulk_replace",
+        "old_word": "메롱",
+        "new_word": "총무인사",
+        "replaced": 3,
+        "revised_at": "2026-05-22",
+        "backup_id": "bulk_20260522_153119"
+      }
+    ]
   },
   {
     "seq": 101,
@@ -1257,7 +1599,25 @@
         "filename": "3-2-6 직원인사고과평정내규.hwp"
       }
     ],
-    "url": "https://rule.hansung.ac.kr/lmxsrv/law/lawFullView.do?SEQ=101&SEQ_HISTORY=1159"
+    "url": "https://rule.hansung.ac.kr/lmxsrv/law/lawFullView.do?SEQ=101&SEQ_HISTORY=1159",
+    "revisions": [
+      {
+        "kind": "bulk_replace",
+        "old_word": "총무인사",
+        "new_word": "메롱",
+        "replaced": 9,
+        "revised_at": "2026-05-22",
+        "backup_id": "bulk_20260522_153007"
+      },
+      {
+        "kind": "bulk_replace",
+        "old_word": "메롱",
+        "new_word": "총무인사",
+        "replaced": 9,
+        "revised_at": "2026-05-22",
+        "backup_id": "bulk_20260522_153119"
+      }
+    ]
   },
   {
     "seq": 102,
@@ -1437,7 +1797,25 @@
         "filename": "3-3-20 직원연구비규정.hwp"
       }
     ],
-    "url": "https://rule.hansung.ac.kr/lmxsrv/law/lawFullView.do?SEQ=113&SEQ_HISTORY=936"
+    "url": "https://rule.hansung.ac.kr/lmxsrv/law/lawFullView.do?SEQ=113&SEQ_HISTORY=936",
+    "revisions": [
+      {
+        "kind": "bulk_replace",
+        "old_word": "총무인사",
+        "new_word": "메롱",
+        "replaced": 2,
+        "revised_at": "2026-05-22",
+        "backup_id": "bulk_20260522_153007"
+      },
+      {
+        "kind": "bulk_replace",
+        "old_word": "메롱",
+        "new_word": "총무인사",
+        "replaced": 2,
+        "revised_at": "2026-05-22",
+        "backup_id": "bulk_20260522_153119"
+      }
+    ]
   },
   {
     "seq": 114,
@@ -2007,7 +2385,25 @@
         "filename": "완78) 3-4-13 사회봉사단규정.hwp"
       }
     ],
-    "url": "https://rule.hansung.ac.kr/lmxsrv/law/lawFullView.do?SEQ=151&SEQ_HISTORY=1542"
+    "url": "https://rule.hansung.ac.kr/lmxsrv/law/lawFullView.do?SEQ=151&SEQ_HISTORY=1542",
+    "revisions": [
+      {
+        "kind": "bulk_replace",
+        "old_word": "총무인사",
+        "new_word": "메롱",
+        "replaced": 2,
+        "revised_at": "2026-05-22",
+        "backup_id": "bulk_20260522_153007"
+      },
+      {
+        "kind": "bulk_replace",
+        "old_word": "메롱",
+        "new_word": "총무인사",
+        "replaced": 2,
+        "revised_at": "2026-05-22",
+        "backup_id": "bulk_20260522_153119"
+      }
+    ]
   },
   {
     "seq": 152,
@@ -2142,7 +2538,25 @@
         "filename": "완57) 3-4-22 학생복지시설 운영 규정.hwp"
       }
     ],
-    "url": "https://rule.hansung.ac.kr/lmxsrv/law/lawFullView.do?SEQ=160&SEQ_HISTORY=1521"
+    "url": "https://rule.hansung.ac.kr/lmxsrv/law/lawFullView.do?SEQ=160&SEQ_HISTORY=1521",
+    "revisions": [
+      {
+        "kind": "bulk_replace",
+        "old_word": "총무인사",
+        "new_word": "메롱",
+        "replaced": 1,
+        "revised_at": "2026-05-22",
+        "backup_id": "bulk_20260522_153007"
+      },
+      {
+        "kind": "bulk_replace",
+        "old_word": "메롱",
+        "new_word": "총무인사",
+        "replaced": 1,
+        "revised_at": "2026-05-22",
+        "backup_id": "bulk_20260522_153119"
+      }
+    ]
   },
   {
     "seq": 161,
@@ -3927,7 +4341,25 @@
         "filename": "3-1-84 공유협력사업 지원에 관한 규정.hwp"
       }
     ],
-    "url": "https://rule.hansung.ac.kr/lmxsrv/law/lawFullView.do?SEQ=285&SEQ_HISTORY=1606"
+    "url": "https://rule.hansung.ac.kr/lmxsrv/law/lawFullView.do?SEQ=285&SEQ_HISTORY=1606",
+    "revisions": [
+      {
+        "kind": "bulk_replace",
+        "old_word": "총무인사",
+        "new_word": "메롱",
+        "replaced": 2,
+        "revised_at": "2026-05-22",
+        "backup_id": "bulk_20260522_153007"
+      },
+      {
+        "kind": "bulk_replace",
+        "old_word": "메롱",
+        "new_word": "총무인사",
+        "replaced": 2,
+        "revised_at": "2026-05-22",
+        "backup_id": "bulk_20260522_153119"
+      }
+    ]
   },
   {
     "seq": 286,
@@ -4122,7 +4554,25 @@
         "filename": "완99) 6-0-62 오픈갤러리 운영위원회 규정.hwp"
       }
     ],
-    "url": "https://rule.hansung.ac.kr/lmxsrv/law/lawFullView.do?SEQ=298&SEQ_HISTORY=1564"
+    "url": "https://rule.hansung.ac.kr/lmxsrv/law/lawFullView.do?SEQ=298&SEQ_HISTORY=1564",
+    "revisions": [
+      {
+        "kind": "bulk_replace",
+        "old_word": "총무인사",
+        "new_word": "메롱",
+        "replaced": 1,
+        "revised_at": "2026-05-22",
+        "backup_id": "bulk_20260522_153007"
+      },
+      {
+        "kind": "bulk_replace",
+        "old_word": "메롱",
+        "new_word": "총무인사",
+        "replaced": 1,
+        "revised_at": "2026-05-22",
+        "backup_id": "bulk_20260522_153119"
+      }
+    ]
   },
   {
     "seq": 299,
@@ -4302,7 +4752,25 @@
         "filename": "완65) 3-4-30 교내 홍보게시물 관리에 관한 내규.hwp"
       }
     ],
-    "url": "https://rule.hansung.ac.kr/lmxsrv/law/lawFullView.do?SEQ=310&SEQ_HISTORY=1529"
+    "url": "https://rule.hansung.ac.kr/lmxsrv/law/lawFullView.do?SEQ=310&SEQ_HISTORY=1529",
+    "revisions": [
+      {
+        "kind": "bulk_replace",
+        "old_word": "총무인사",
+        "new_word": "메롱",
+        "replaced": 1,
+        "revised_at": "2026-05-22",
+        "backup_id": "bulk_20260522_153007"
+      },
+      {
+        "kind": "bulk_replace",
+        "old_word": "메롱",
+        "new_word": "총무인사",
+        "replaced": 1,
+        "revised_at": "2026-05-22",
+        "backup_id": "bulk_20260522_153119"
+      }
+    ]
   },
   {
     "seq": 311,
@@ -4362,7 +4830,25 @@
         "filename": "완37) 3-2-44 행정부서 정원관리에 관한 규정.hwp"
       }
     ],
-    "url": "https://rule.hansung.ac.kr/lmxsrv/law/lawFullView.do?SEQ=315&SEQ_HISTORY=1502"
+    "url": "https://rule.hansung.ac.kr/lmxsrv/law/lawFullView.do?SEQ=315&SEQ_HISTORY=1502",
+    "revisions": [
+      {
+        "kind": "bulk_replace",
+        "old_word": "총무인사",
+        "new_word": "메롱",
+        "replaced": 3,
+        "revised_at": "2026-05-22",
+        "backup_id": "bulk_20260522_153007"
+      },
+      {
+        "kind": "bulk_replace",
+        "old_word": "메롱",
+        "new_word": "총무인사",
+        "replaced": 3,
+        "revised_at": "2026-05-22",
+        "backup_id": "bulk_20260522_153119"
+      }
+    ]
   },
   {
     "seq": 316,

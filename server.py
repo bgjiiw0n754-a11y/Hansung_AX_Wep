@@ -13,7 +13,7 @@ _ENV_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
 load_dotenv(_ENV_PATH)
 print(f"[ENV] .env 로드 시도: {_ENV_PATH}  존재: {os.path.exists(_ENV_PATH)}")
 
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Depends
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -400,19 +400,112 @@ def logo():
         return FileResponse(path)
     raise HTTPException(404, "Logo not found")
 
+
+# 업로드된 원본 파일 서빙 — upload-regulation으로 저장된 PDF/HWP/DOCX를
+# 브라우저에서 바로 열거나 다운로드할 수 있게 한다. 메인 챗봇의 "원문 →" 링크가
+# 이 엔드포인트를 가리키도록 _to_viewable_url() 헬퍼가 자동 변환한다.
+@app.get("/uploads/{filename:path}")
+def serve_uploaded_file(filename: str, raw: int = 0):
+    """업로드된 원본 파일 서빙.
+    - raw=1: 파일 자체 (PDF는 inline, 그 외는 attachment)
+    - raw=0 (기본): HTML 래퍼로 응답. 새 탭이 about:blank로 남는 것 방지.
+      PDF는 embed로 임베드, HWP/DOCX 등은 자동 다운로드 페이지."""
+    safe = os.path.basename(filename)
+    path = os.path.join(BASE_DIR, "uploads", safe)
+    if not os.path.exists(path):
+        raise HTTPException(404, f"업로드된 파일을 찾을 수 없습니다: {safe}")
+
+    import mimetypes
+    from urllib.parse import quote
+    content_type, _ = mimetypes.guess_type(safe)
+
+    # raw=1 → 실제 파일 반환
+    if raw == 1:
+        headers = {}
+        if content_type == "application/pdf":
+            headers["Content-Disposition"] = f'inline; filename*=UTF-8\'\'{quote(safe)}'
+        else:
+            headers["Content-Disposition"] = f'attachment; filename*=UTF-8\'\'{quote(safe)}'
+        return FileResponse(path, media_type=content_type, headers=headers)
+
+    # 기본: HTML 래퍼 (브라우저 새 탭이 빈 채로 남는 것 방지)
+    from fastapi.responses import HTMLResponse
+    raw_url = f"/uploads/{quote(safe)}?raw=1"
+    ext = safe.rsplit(".", 1)[-1].lower() if "." in safe else ""
+
+    if content_type == "application/pdf":
+        html = f"""<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8">
+<title>{safe}</title>
+<style>html,body{{margin:0;padding:0;height:100%;background:#525659;font-family:'Noto Sans KR',sans-serif}}
+.bar{{background:#fff;padding:8px 16px;border-bottom:1px solid #ddd;display:flex;align-items:center;gap:12px;font-size:13px}}
+.bar a{{color:#1A5FE0;text-decoration:none;font-weight:600}}
+.bar a:hover{{text-decoration:underline}}
+.bar .name{{color:#333;font-weight:700;margin-right:auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
+embed,iframe{{width:100vw;height:calc(100vh - 41px);border:none;display:block}}</style>
+</head><body>
+<div class="bar"><span class="name">📄 {safe}</span>
+<a href="{raw_url}" download="{safe}">⬇ 다운로드</a></div>
+<embed src="{raw_url}" type="application/pdf"/>
+</body></html>"""
+        return HTMLResponse(html)
+
+    # PDF가 아니면 즉시 다운로드 트리거하는 페이지
+    html = f"""<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8">
+<title>{safe}</title>
+<style>body{{font-family:'Noto Sans KR',sans-serif;padding:40px;text-align:center;color:#333}}
+.box{{max-width:480px;margin:60px auto;padding:32px;border:1px solid #DDE3EE;border-radius:14px;background:#fff;box-shadow:0 4px 16px rgba(0,48,135,0.06)}}
+h2{{color:#003087;margin-top:0}} p{{color:#666;line-height:1.7}}
+a{{display:inline-block;margin-top:12px;padding:12px 28px;background:#003087;color:#fff;border-radius:10px;text-decoration:none;font-weight:700}}
+a:hover{{background:#1A5FE0}}</style>
+</head><body><div class="box">
+<h2>📎 {safe}</h2>
+<p>이 형식({ext})은 브라우저에서 직접 볼 수 없어 다운로드합니다.</p>
+<a href="{raw_url}" download="{safe}">⬇ 파일 다운로드</a>
+</div>
+<script>setTimeout(function(){{location.href="{raw_url}"}},800)</script>
+</body></html>"""
+    return HTMLResponse(html)
+
+
+def _to_viewable_url(url, request=None):
+    """DB의 url을 브라우저에서 열 수 있는 형식으로 변환.
+    - 'upload://파일명' → '/uploads/파일명' (또는 절대 URL — request 있으면)
+    - 그 외 정규 URL은 그대로 (rule.hansung.ac.kr 등)"""
+    if not url or not isinstance(url, str):
+        return url
+    if url.startswith("upload://"):
+        from urllib.parse import quote
+        filename = url.replace("upload://", "", 1)
+        path = "/uploads/" + quote(filename)
+        # request가 주어지면 절대 URL로 (클라이언트가 base URL을 못 잡을 때 안전)
+        if request is not None:
+            try:
+                base = str(request.base_url).rstrip("/")
+                return base + path
+            except Exception:
+                pass
+        return path
+    return url
+
+
 @app.get("/")
 def root():
     path = os.path.join(BASE_DIR, "index.html")
     if os.path.exists(path):
         return FileResponse(path, headers=NO_CACHE)
-    raise HTTPException(404, "index.html not found")
+    raise HTTPException(404,
+        f"index.html을 찾을 수 없습니다.\n"
+        f"경로: {path}\n"
+        f"GitHub의 index.html을 이 폴더에 받아 주세요: "
+        f"https://github.com/sumiiniee/Hansung_AX/blob/main/index.html")
 
 @app.get("/login-page")
 def login_page():
     path = os.path.join(BASE_DIR, "login.html")
     if os.path.exists(path):
         return FileResponse(path, headers=NO_CACHE)
-    raise HTTPException(404, "login.html not found")
+    raise HTTPException(404,
+        f"login.html을 찾을 수 없습니다.\n경로: {path}")
 
 @app.get("/upload")
 def upload_page():
@@ -465,6 +558,169 @@ def auth_check(payload: dict = Depends(verify_token)):
 
 
 # ── 텍스트 추출 헬퍼 ──────────────────────────────────────────────
+def _extract_hwp_tables_two_column(data: bytes) -> list:
+    """HWP를 HTML로 변환한 뒤, "현행규정 | 개정(안)" 양식의 두 컬럼 표를 모두 찾아서
+    좌/우 셀 텍스트를 분리해 반환한다. 한 회의록에 여러 안건(여러 표)이 있을 수 있다.
+    반환: [{"heading_before": "표 직전 텍스트", "current": "좌측 모든 셀", "new": "우측 모든 셀"}, ...]
+    실패 시 빈 리스트."""
+    import tempfile, subprocess, sys, os as _os, time as _time
+    if not data: return []
+    uniq = f"{_os.getpid()}_{int(_time.time()*1000)}"
+    tmp_hwp = _os.path.join(tempfile.gettempdir(), f"hsu_mt_{uniq}.hwp")
+    tmp_dir = _os.path.join(tempfile.gettempdir(), f"hsu_mt_html_{uniq}")
+    try:
+        with open(tmp_hwp, "wb") as f:
+            f.write(data)
+        _os.makedirs(tmp_dir, exist_ok=True)
+        scripts_dir = _os.path.join(_os.path.dirname(sys.executable), "Scripts")
+        cmds = [
+            [_os.path.join(scripts_dir, "hwp5html.exe"), "--output", tmp_dir, tmp_hwp],
+            [_os.path.join(scripts_dir, "hwp5html"), "--output", tmp_dir, tmp_hwp],
+            ["hwp5html", "--output", tmp_dir, tmp_hwp],
+            [sys.executable, "-m", "hwp5.hwp5html", "--output", tmp_dir, tmp_hwp],
+            [sys.executable, "-m", "pyhwp.hwp5html", "--output", tmp_dir, tmp_hwp],
+        ]
+        html_text = ""
+        for cmd in cmds:
+            try:
+                r = subprocess.run(cmd, capture_output=True, timeout=60)
+                if r.returncode == 0:
+                    # output dir에서 (x)html 파일 찾기
+                    for fn in _os.listdir(tmp_dir):
+                        if fn.lower().endswith((".xhtml", ".html", ".htm")):
+                            try:
+                                with open(_os.path.join(tmp_dir, fn), "r", encoding="utf-8") as fh:
+                                    html_text = fh.read()
+                                break
+                            except Exception:
+                                continue
+                    if html_text:
+                        break
+            except FileNotFoundError:
+                continue
+            except Exception:
+                continue
+        if not html_text:
+            return []
+
+        from bs4 import BeautifulSoup
+        soup = BeautifulSoup(html_text, "html.parser")
+        results = []
+        for table in soup.find_all("table"):
+            rows = table.find_all("tr")
+            if len(rows) < 2:
+                continue
+            # 첫 행이 "현행규정 | 개정(안)" 헤더인지 확인
+            head_cells = rows[0].find_all(["td", "th"])
+            if len(head_cells) < 2:
+                continue
+            left_head = head_cells[0].get_text(strip=True)
+            right_head = head_cells[1].get_text(strip=True)
+            is_diff_table = (
+                ("현행" in left_head) and
+                (("개정" in right_head) or ("안" in right_head))
+            )
+            if not is_diff_table:
+                continue
+            # 좌/우 셀 본문 합치기 (헤더 행 제외)
+            cur_parts, new_parts = [], []
+            for row in rows[1:]:
+                cells = row.find_all(["td", "th"])
+                if len(cells) < 2:
+                    continue
+                cur_parts.append(cells[0].get_text(separator="\n", strip=True))
+                new_parts.append(cells[1].get_text(separator="\n", strip=True))
+            cur_joined = "\n".join([p for p in cur_parts if p.strip()])
+            new_joined = "\n".join([p for p in new_parts if p.strip()])
+            if not (cur_joined and new_joined):
+                continue
+            # 표 직전 텍스트(예: "20. [5-0-2] 인문과학연구원 규정 개정(안)") 추출
+            heading_before = ""
+            try:
+                prev = table.find_previous(string=True)
+                # 표 위로 약 600자만 (안건 번호 + 사유)
+                chunks = []
+                cur_node = table.find_previous()
+                while cur_node and len("\n".join(chunks)) < 600:
+                    if hasattr(cur_node, "get_text"):
+                        t = cur_node.get_text(separator=" ", strip=True)
+                        if t:
+                            chunks.insert(0, t)
+                    cur_node = cur_node.find_previous()
+                heading_before = "\n".join(chunks)[-600:]
+            except Exception:
+                pass
+            results.append({
+                "heading_before": heading_before,
+                "current": cur_joined,
+                "new": new_joined,
+            })
+        return results
+    finally:
+        # 임시 파일 정리
+        try: _os.remove(tmp_hwp)
+        except Exception: pass
+        try:
+            for fn in _os.listdir(tmp_dir):
+                try: _os.remove(_os.path.join(tmp_dir, fn))
+                except Exception: pass
+            _os.rmdir(tmp_dir)
+        except Exception: pass
+
+
+def _extract_meeting_tables_from_text(text: str) -> list:
+    """텍스트 기반 회의록 파서 (HWP HTML 파싱이 실패했을 때 폴백).
+    핵심 휴리스틱: '제 N 조'가 두 번 등장하면 첫 번째 = 현행, 두 번째 = 개정안.
+    안건이 여러 개면 안건마다 따로 분리.
+    반환 형식은 _extract_hwp_tables_two_column 와 동일."""
+    if not text or len(text) < 50:
+        return []
+    results = []
+
+    # 안건 시작 패턴: "XX. [코드] ... 개정(안)" 또는 "XX. 규정명 개정(안)"
+    agenda_pat = _re.compile(
+        r'(?:^|\n)\s*(\d{1,3})\s*\.\s*(?:\[[\d\-]+\]\s*)?[^\n]*?개정\s*\(?\s*안\s*\)?',
+        _re.MULTILINE
+    )
+    matches = list(agenda_pat.finditer(text))
+    if not matches:
+        sections = [(0, len(text))]
+    else:
+        sections = []
+        for i, m in enumerate(matches):
+            sections.append((m.start(),
+                             matches[i+1].start() if i+1 < len(matches) else len(text)))
+
+    article_pat = _re.compile(r'제\s*(\d+)\s*조(?:\s*의\s*\d+)?')
+    for sec_start, sec_end in sections:
+        section = text[sec_start:sec_end]
+        articles = list(article_pat.finditer(section))
+        if len(articles) < 2:
+            continue
+        # 첫 등장과 동일한 조 번호의 두 번째 등장 = 개정안 시작
+        first = articles[0]
+        first_num = first.group(1)
+        second = None
+        for a in articles[1:]:
+            if a.group(1) == first_num:
+                second = a
+                break
+        if not second:
+            continue
+        current_text = section[first.start():second.start()].rstrip()
+        new_text = section[second.start():].rstrip()
+        # 너무 짧으면 (잘못 분리) 스킵
+        if len(current_text) < 20 or len(new_text) < 20:
+            continue
+        heading_before = section[:first.start()].strip()[-500:]
+        results.append({
+            "heading_before": heading_before,
+            "current": current_text,
+            "new": new_text,
+        })
+    return results
+
+
 def _extract_text(file: UploadFile) -> str:
     """업로드 파일에서 텍스트 추출. 지원: PDF, DOCX, TXT, JSON, HWP, HWPX, DOC.
     각 형식별로 여러 폴백 경로를 시도하며, 모두 실패하면 어떤 단계에서 어떻게
@@ -575,8 +831,59 @@ def _extract_text(file: UploadFile) -> str:
             with open(tmp, "wb") as f:
                 f.write(data)
 
-            # 1) hwp5txt 외부 명령 (가장 정확)
             scripts_dir = _os.path.join(_os.path.dirname(sys.executable), "Scripts")
+
+            # 0) hwp5proc xml — XML로 변환 (표 안 내용까지 모두 포함됨)
+            # hwp5txt는 표를 '<표>' 한 단어로만 출력하므로, 표가 있는 회의록에서는
+            # 정보가 통째로 사라진다. hwp5proc xml은 표 안의 모든 텍스트를 보존한다.
+            xml_cmds = [
+                [_os.path.join(scripts_dir, "hwp5proc.exe"), "xml", tmp],
+                [_os.path.join(scripts_dir, "hwp5proc"), "xml", tmp],
+                ["hwp5proc", "xml", tmp],
+                [sys.executable, "-m", "hwp5.hwp5proc", "xml", tmp],
+                [sys.executable, "-m", "pyhwp.hwp5proc", "xml", tmp],
+            ]
+            for cmd in xml_cmds:
+                try:
+                    result = subprocess.run(cmd, capture_output=True, timeout=60)
+                    if result.returncode == 0 and result.stdout:
+                        try:
+                            from bs4 import BeautifulSoup as _BS
+                            # hwp5proc xml의 출력에는 표 셀까지 모든 텍스트가 포함됨
+                            try:
+                                soup = _BS(result.stdout, "xml")
+                            except Exception:
+                                soup = _BS(result.stdout, "html.parser")
+                            # 한글 문서의 텍스트는 <Text> / <t> 태그 또는 그 자손에
+                            # 들어있음. 가장 안전한 방법: 모든 텍스트 노드를 순서대로
+                            # 모은 뒤 줄바꿈으로 합친다 (문서 순서 = XML 순서).
+                            parts = []
+                            for txt_tag in soup.find_all(_re.compile(r'(?:^|:)(Text|text|t|Char)$')):
+                                s = txt_tag.get_text()
+                                if s and s.strip():
+                                    parts.append(s.strip())
+                            # 위 셀렉터가 비면 폴백: root.get_text()
+                            if not parts:
+                                whole = soup.get_text(separator="\n", strip=True) if soup else ""
+                                if whole and whole.strip():
+                                    return whole.strip()
+                            else:
+                                merged = "\n".join(parts)
+                                if merged.strip():
+                                    return merged.strip()
+                            errors.append(f"{cmd[0]} xml: 텍스트 노드 없음")
+                        except Exception as e:
+                            errors.append(f"{cmd[0]} xml-parse: {e}")
+                    elif result.returncode != 0:
+                        errors.append(f"{cmd[0]} xml: returncode={result.returncode}")
+                except FileNotFoundError:
+                    continue
+                except subprocess.TimeoutExpired:
+                    errors.append(f"{cmd[0]} xml: timeout (60s)")
+                except Exception as e:
+                    errors.append(f"{cmd[0]} xml: {e}")
+
+            # 1) hwp5txt 외부 명령 (폴백 — 표는 '<표>'로 치환되지만 그래도 시도)
             cmds_to_try = [
                 [_os.path.join(scripts_dir, "hwp5txt.exe"), tmp],
                 [_os.path.join(scripts_dir, "hwp5txt"), tmp],
@@ -1132,7 +1439,7 @@ def get_diff(req: Q):
 
 # ── 규정 질의 ─────────────────────────────────────────────────────
 @app.post("/query", response_model=A)
-def query(req: Q):
+def query(req: Q, request: Request):
     q = req.question.strip()
     if not q:
         raise HTTPException(400, "Empty question")
@@ -1301,7 +1608,7 @@ def query(req: Q):
         "title": r[1],
         "article": r[2],
         "department": _resolve_dept(r[1], r[3]),
-        "url": r[4],
+        "url": _to_viewable_url(r[4], request),
         "score": round(r[6], 3),
     } for r in rows]
 
@@ -1488,7 +1795,7 @@ def _post_process_answer(answer: str) -> tuple[str, list[str]]:
 
 # ── POST /query-stream — SSE 스트리밍 답변 ────────────────────────
 @app.post("/query-stream")
-def query_stream(req: Q):
+def query_stream(req: Q, request: Request):
     """/query와 동일한 검색·rerank를 거치되, Claude 답변을 SSE로 토큰 스트리밍.
     이벤트 타입:
       meta  : 검색 결과(sources/dept/dept_phone) 즉시 전송
@@ -1554,7 +1861,7 @@ def query_stream(req: Q):
             sources = [{
                 "title": r[1], "article": r[2],
                 "department": _resolve(r[1], r[3]),
-                "url": r[4], "score": round(r[6], 3),
+                "url": _to_viewable_url(r[4], request), "score": round(r[6], 3),
             } for r in rows]
 
             # 부서 추정 — 다부서 분리 + 최빈값
@@ -1718,7 +2025,7 @@ def get_rules():
                     chapters[chap_key].append({
                         "seq": r.get("seq", 0), "code": raw_code,
                         "name": title, "dept": r.get("department", ""),
-                        "url": r.get("url", ""), "uploaded": False
+                        "url": _to_viewable_url(r.get("url", "")), "uploaded": False
                     })
                 except: continue
     except: pass
@@ -1735,7 +2042,7 @@ def get_rules():
             chapters[chap_key].append({
                 "seq": 9999, "code": f"{chap_num}-upload",
                 "name": f"📎 {rule_title}", "dept": "업로드 규정",
-                "url": "", "uploaded": True
+                "url": _to_viewable_url(url), "uploaded": True  # ← 변환된 /uploads/... 경로
             })
         conn.close()
     except: pass
@@ -1775,7 +2082,7 @@ def search_rules(req: Q):
     from collections import defaultdict as _dd
     grouped = _dd(list)
     for r in rows:
-        grouped[r[0]].append({"article":r[1],"department":r[2],"url":r[3] or "","snippet":r[4][:200].strip()})
+        grouped[r[0]].append({"article":r[1],"department":r[2],"url":_to_viewable_url(r[3] or ""),"snippet":r[4][:200].strip()})
 
     results = [{"title":t,"department":c[0]["department"],"url":c[0]["url"],"chunks":c[:3]}
                for t,c in grouped.items()]
@@ -1825,6 +2132,99 @@ def _save_history_json(data: list):
         raise HTTPException(500, f"hansung_rules_history.json 저장 실패: {e}")
 
 
+def _sync_uploaded_rules_to_history() -> int:
+    """DB의 'upload://...' 규정 중 history.json에 누락된 것을 자동 등록한다.
+    /upload 가 history 등록 코드를 갖기 전에 업로드된 규정은 매칭 후보에서 빠지므로,
+    이 함수가 회의록 분석 직전에 한 번씩 호출되어 백필(backfill) 한다.
+    반환값: 새로 등록한 규정 개수."""
+    try:
+        history = _load_history_json()
+    except Exception:
+        return 0
+    existing_urls = set()
+    existing_titles = set()
+    for r in history:
+        u = (r.get("url_latest") or "")
+        if u.startswith("upload://"):
+            existing_urls.add(u)
+        t = (r.get("title") or "").strip()
+        if t:
+            existing_titles.add(t)
+
+    try:
+        conn = psycopg2.connect(DB_URL)
+        cur = conn.cursor()
+        # 청크들을 id 순서로 모아 본문을 복원 (조 단위 chunk가 id 오름차순)
+        cur.execute("""
+            SELECT url, MIN(id) AS first_id, COUNT(*) AS cnt,
+                   STRING_AGG(content, E'\n\n' ORDER BY id) AS full_content
+            FROM rule_chunks
+            WHERE url LIKE 'upload://%'
+            GROUP BY url
+        """)
+        rows = cur.fetchall()
+        conn.close()
+    except Exception as e:
+        print(f"[SYNC] DB 조회 실패(무시): {e}")
+        return 0
+
+    max_seq = max((int(r.get("seq", 0)) for r in history), default=0)
+    added = 0
+    from datetime import datetime as _dt
+    for url, first_id, cnt, full_content in rows:
+        if url in existing_urls:
+            continue
+        filename = url.replace("upload://", "")
+        rule_title_clean = os.path.splitext(filename)[0]
+        if rule_title_clean.strip() in existing_titles:
+            continue   # 이름 충돌 회피
+        max_seq += 1
+        try:
+            ts = _dt.fromtimestamp(int(first_id) / 1000.0).strftime("%Y-%m-%d")
+        except Exception:
+            ts = _dt.now().strftime("%Y-%m-%d")
+        history.append({
+            "seq":        max_seq,
+            "title":      rule_title_clean,
+            "department": "업로드 규정",
+            "chapter":    3,                # 기본값 — 사용자 수정 가능
+            "category":   "제3편 학사행정",
+            "url_latest": url,
+            "version_count": 1,
+            "versions": [{
+                "seq_history":    max_seq * 10000,
+                "revision_date":  ts,
+                "revision_type":  "신규",
+                "revision_label": "업로드 등록 (자동 백필)",
+                "is_latest":      True,
+                "content":        full_content or "",
+                "url":            url,
+                "department":     "업로드 규정",
+                "attachments":    [],
+            }],
+            "revision_history_table": [],
+            "_uploaded":         True,
+            "_backfilled":       True,
+        })
+        # DB 청크에 seq도 채워주면 개정 후 _reindex가 잘 찾음
+        try:
+            conn = psycopg2.connect(DB_URL); cur = conn.cursor()
+            cur.execute("UPDATE rule_chunks SET seq=%s WHERE url=%s", (str(max_seq), url))
+            conn.commit(); conn.close()
+        except Exception:
+            pass
+        added += 1
+
+    if added > 0:
+        try:
+            _save_history_json(history)
+            print(f"[SYNC] 업로드 규정 {added}건을 history.json에 자동 등록(백필)")
+        except Exception as e:
+            print(f"[SYNC] 저장 실패: {e}")
+            return 0
+    return added
+
+
 def _get_latest_version(reg: dict) -> dict | None:
     """history JSON의 한 규정에서 최신 버전(is_latest=True)을 반환. 없으면 첫 버전."""
     versions = reg.get("versions", []) or []
@@ -1846,6 +2246,73 @@ def _get_latest_version_index(reg: dict) -> int:
 
 
 # -- 개정 가능한 규정 목록 (검색용) --------------------------------
+# ── 어절 단위 + 글자 단위 하이브리드 diff ───────────────────────────
+# 글자 단위 diff만 쓰면 "(2026.4.10.)" vs "(2026.0.00.)" 같은 텍스트가 글자 하나씩
+# 매칭돼서 "(2026.40.100.)" 식의 혼란스러운 표시가 된다. 그래서:
+#   1단계: 공백 기준 어절(token) 단위로 diff
+#   2단계: replace된 어절끼리만 다시 글자 단위 diff
+# → 큰 변경은 단어 통째로 빨강/파랑, 미세한 변경은 글자별로 보임.
+def _word_then_char_diff(cur_text: str, new_text: str) -> list:
+    import difflib
+    # 공백 묶음 vs 비공백 묶음으로 분리 (공백 보존)
+    cur_tokens = _re.findall(r'\s+|\S+', cur_text)
+    new_tokens = _re.findall(r'\s+|\S+', new_text)
+    sm_w = difflib.SequenceMatcher(None, cur_tokens, new_tokens, autojunk=False)
+    segments = []
+    for tag, i1, i2, j1, j2 in sm_w.get_opcodes():
+        if tag == "equal":
+            chunk = "".join(cur_tokens[i1:i2])
+            if chunk:
+                segments.append({"text": chunk, "kind": "equal"})
+        elif tag == "delete":
+            chunk = "".join(cur_tokens[i1:i2])
+            if chunk:
+                segments.append({"text": chunk, "kind": "delete"})
+        elif tag == "insert":
+            chunk = "".join(new_tokens[j1:j2])
+            if chunk:
+                segments.append({"text": chunk, "kind": "insert"})
+        elif tag == "replace":
+            cur_chunk = "".join(cur_tokens[i1:i2])
+            new_chunk = "".join(new_tokens[j1:j2])
+            # 숫자·구두점이 섞인 토큰(날짜, 일자, 코드 등)은 통째로 처리해야 직관적.
+            # "(2026.4.10.)" ↔ "(2026.0.00.)" 같은 변경은 글자 단위로 잘리면 혼란스러움.
+            has_nonword = bool(_re.search(r'[\d\W]', cur_chunk + new_chunk))
+            # 한글만으로 된 짧은 변경(조사 변화 등)은 어절 안에서 글자 단위로 봐야
+            # "촉진시키는→촉진하는"에서 "시키"↔"하"가 보임.
+            if (not has_nonword) and len(cur_chunk) <= 24 and len(new_chunk) <= 24:
+                sm_c = difflib.SequenceMatcher(None, cur_chunk, new_chunk, autojunk=False)
+                for ct, ci1, ci2, cj1, cj2 in sm_c.get_opcodes():
+                    if ct == "equal":
+                        s = cur_chunk[ci1:ci2]
+                        if s: segments.append({"text": s, "kind": "equal"})
+                    elif ct == "delete":
+                        s = cur_chunk[ci1:ci2]
+                        if s: segments.append({"text": s, "kind": "delete"})
+                    elif ct == "insert":
+                        s = new_chunk[cj1:cj2]
+                        if s: segments.append({"text": s, "kind": "insert"})
+                    elif ct == "replace":
+                        sd = cur_chunk[ci1:ci2]
+                        si = new_chunk[cj1:cj2]
+                        if sd: segments.append({"text": sd, "kind": "delete"})
+                        if si: segments.append({"text": si, "kind": "insert"})
+            else:
+                # 통째로 빨강/파랑
+                if cur_chunk:
+                    segments.append({"text": cur_chunk, "kind": "delete"})
+                if new_chunk:
+                    segments.append({"text": new_chunk, "kind": "insert"})
+    # 인접 same-kind 세그먼트 병합 (렌더링 시 span 수 줄임)
+    merged = []
+    for seg in segments:
+        if merged and merged[-1]["kind"] == seg["kind"]:
+            merged[-1]["text"] += seg["text"]
+        else:
+            merged.append(dict(seg))
+    return merged
+
+
 @app.get("/revisable-rules")
 def revisable_rules(payload: dict = Depends(verify_token)):
     """hansung_rules_history.json 안의 규정 목록 — 개정 대상 선택용 (최신 버전 기준)"""
@@ -1977,21 +2444,10 @@ async def revise_preview(
     latest = target["versions"][latest_idx]
     current_content = latest.get("content", "") or ""
 
-    # ③ 글자 단위 diff — segments 하나로 양쪽 컬럼에서 공유 사용
+    # ③ 하이브리드 diff (어절 → 글자) — 자세한 설명은 _word_then_char_diff 참고
     import difflib
-    sm = difflib.SequenceMatcher(None, current_content, new_content, autojunk=False)
-    segments = []
-    for tag, i1, i2, j1, j2 in sm.get_opcodes():
-        if tag == "equal":
-            segments.append({"text": current_content[i1:i2], "kind": "equal"})
-        elif tag == "delete":
-            segments.append({"text": current_content[i1:i2], "kind": "delete"})
-        elif tag == "insert":
-            segments.append({"text": new_content[j1:j2], "kind": "insert"})
-        elif tag == "replace":
-            # 글자 단위에서는 replace를 (지움 + 추가)로 풀어서 표시
-            segments.append({"text": current_content[i1:i2], "kind": "delete"})
-            segments.append({"text": new_content[j1:j2], "kind": "insert"})
+    segments = _word_then_char_diff(current_content, new_content)
+    similarity = difflib.SequenceMatcher(None, current_content, new_content).ratio()
 
     return {
         "seq": seq,
@@ -2003,7 +2459,7 @@ async def revise_preview(
         "new_length": len(new_content),
         "extract_method": extract_method,
         "segments": segments,
-        "similarity": round(sm.ratio() * 100, 1),
+        "similarity": round(similarity * 100, 1),
     }
 
 
@@ -2055,20 +2511,10 @@ async def revise_article_preview(
     else:
         new_article_text = f"{a['head']} (개정 {today})\n{new_text}"
 
-    # 글자 단위 diff
+    # 하이브리드 diff (어절 → 글자)
     import difflib
-    sm = difflib.SequenceMatcher(None, current_article_text, new_article_text, autojunk=False)
-    segments = []
-    for tag, i1, i2, j1, j2 in sm.get_opcodes():
-        if tag == "equal":
-            segments.append({"text": current_article_text[i1:i2], "kind": "equal"})
-        elif tag == "delete":
-            segments.append({"text": current_article_text[i1:i2], "kind": "delete"})
-        elif tag == "insert":
-            segments.append({"text": new_article_text[j1:j2], "kind": "insert"})
-        elif tag == "replace":
-            segments.append({"text": current_article_text[i1:i2], "kind": "delete"})
-            segments.append({"text": new_article_text[j1:j2], "kind": "insert"})
+    segments = _word_then_char_diff(current_article_text, new_article_text)
+    similarity = difflib.SequenceMatcher(None, current_article_text, new_article_text).ratio()
 
     return {
         "seq": seq,
@@ -2081,7 +2527,7 @@ async def revise_article_preview(
         "new_length": len(new_article_text),
         "extract_method": "직접 입력 (조 단위)",
         "segments": segments,
-        "similarity": round(sm.ratio() * 100, 1),
+        "similarity": round(similarity * 100, 1),
     }
 
 
@@ -2197,24 +2643,53 @@ async def revise_regulation(
 # -- 되돌리기: 백업 목록 -------------------------------------------
 @app.get("/revision-backups")
 def revision_backups(payload: dict = Depends(verify_token)):
-    """되돌릴 수 있는 개정 백업 목록 (최신순)"""
-    if not os.path.isdir(REVISION_BACKUP_DIR):
-        return {"backups": []}
+    """활동 로그 — 되돌릴 수 있는 개정 백업 + 업로드된 규정을 한 피드로 반환 (최신순)"""
     items = []
-    for fn in os.listdir(REVISION_BACKUP_DIR):
-        if not fn.endswith(".json"):
-            continue
-        try:
-            with open(os.path.join(REVISION_BACKUP_DIR, fn), "r", encoding="utf-8") as f:
-                b = _json.load(f)
+    # ── 1) 개정/치환 백업 ──
+    if os.path.isdir(REVISION_BACKUP_DIR):
+        for fn in os.listdir(REVISION_BACKUP_DIR):
+            if not fn.endswith(".json"):
+                continue
+            try:
+                with open(os.path.join(REVISION_BACKUP_DIR, fn), "r", encoding="utf-8") as f:
+                    b = _json.load(f)
+                items.append({
+                    "backup_id":    b.get("backup_id"),
+                    "seq":          b.get("seq"),
+                    "title":        b.get("title"),
+                    "backed_up_at": b.get("backed_up_at"),
+                    "kind":         b.get("kind", ""),
+                    "extras":       b.get("extras", {}),
+                })
+            except Exception:
+                continue
+    # ── 2) 업로드된 규정 — DB의 first_id에서 unix-ms 타임스탬프 복원 ──
+    try:
+        from datetime import datetime as _dt
+        conn = psycopg2.connect(DB_URL); cur = conn.cursor()
+        cur.execute("""
+            SELECT url, COUNT(*) as cnt, MIN(id) as first_id
+            FROM rule_chunks WHERE url LIKE 'upload://%'
+            GROUP BY url
+        """)
+        for r in cur.fetchall():
+            url, cnt, first_id = r[0], r[1], r[2]
+            filename = url.replace("upload://", "")
+            try:
+                ts = _dt.fromtimestamp(int(first_id) / 1000.0).strftime("%Y-%m-%dT%H:%M:%S")
+            except Exception:
+                ts = ""
             items.append({
-                "backup_id":    b.get("backup_id"),
-                "seq":          b.get("seq"),
-                "title":        b.get("title"),
-                "backed_up_at": b.get("backed_up_at"),
+                "backup_id":    None,        # 되돌리기 백업 ID 없음 — 삭제로 대신
+                "seq":          None,
+                "title":        filename,
+                "backed_up_at": ts,
+                "kind":         "upload",
+                "extras":       {"filename": filename, "chunks": cnt},
             })
-        except Exception:
-            continue
+        conn.close()
+    except Exception:
+        pass  # DB 오류 시 업로드 부분만 빠짐, 백업은 그대로 반환
     items.sort(key=lambda x: x.get("backed_up_at") or "", reverse=True)
     return {"backups": items}
 
@@ -2687,6 +3162,530 @@ async def extract_article_revision(
     }
 
 
+# ══════════════════════════════════════════════════════════════════
+# 회의록 기반 AI 개정 — 회의자료/회의록 업로드 → AI가 개정 항목 자동 추출
+# ══════════════════════════════════════════════════════════════════
+@app.post("/extract-meeting-revisions")
+async def extract_meeting_revisions(
+    file: UploadFile = File(...),
+    payload: dict = Depends(verify_token),
+):
+    """
+    규정 개정 관련 회의자료/회의록을 받아:
+      1) (HWP인 경우) 표 구조 직접 파싱 — 현행/개정안 컬럼 분리
+      2) 텍스트 추출 (폴백)
+      3) Claude가 회의록에서 '어떤 규정의 어떤 조항을 어떻게 개정하는지' 자동 분석
+      4) 항목 리스트로 반환 — 프론트가 각 항목을 글자 단위 diff 미리보기로 띄움
+    """
+    # 1) 파일 바이트 읽기 (표 파싱과 텍스트 추출 둘 다 사용)
+    data = await file.read()
+    fname_lower = (file.filename or "").lower()
+    # _extract_text가 다시 읽을 수 있도록 stream 재구성
+    from io import BytesIO
+    file.file = BytesIO(data)
+
+    # 2) HWP면 표 구조에서 현행/개정안 직접 분리 시도 (HTML 변환)
+    parsed_tables = []
+    if fname_lower.endswith(".hwp"):
+        try:
+            parsed_tables = _extract_hwp_tables_two_column(data)
+        except Exception as e:
+            print(f"[MEETING] HTML 표 파싱 실패(무시): {e}")
+            parsed_tables = []
+
+    # 3) 전체 텍스트 추출
+    try:
+        raw_text = _extract_text(file)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(400, f"파일 읽기 실패: {e}")
+    if not raw_text or len(raw_text.strip()) < 10:
+        raise HTTPException(400, "파일에서 텍스트를 추출하지 못했습니다.")
+    raw_text = raw_text.strip()
+
+    # 4) HTML 파싱이 빈약/실패하면 텍스트 기반 폴백 — '제 N 조' 두 번 등장 패턴
+    if not parsed_tables:
+        try:
+            parsed_tables = _extract_meeting_tables_from_text(raw_text)
+            if parsed_tables:
+                print(f"[MEETING] 텍스트 파서로 안건 {len(parsed_tables)}건 분리 성공")
+        except Exception as e:
+            print(f"[MEETING] 텍스트 파서 실패(무시): {e}")
+            parsed_tables = []
+
+    return _analyze_meeting_minutes(raw_text, target_seq=-1, parsed_tables=parsed_tables)
+
+
+# -- 회의록 직접 입력 → AI 분석 ----------------------------------
+@app.post("/extract-meeting-revisions-text")
+async def extract_meeting_revisions_text(
+    text: str = Form(...),
+    target_seq: int = Form(-1),
+    payload: dict = Depends(verify_token),
+):
+    """
+    회의록 본문을 텍스트로 직접 받아 AI 분석.
+    target_seq를 지정하면 해당 규정의 안건만 추출하도록 AI에게 강하게 지시한다 (선택).
+    """
+    txt = (text or "").strip()
+    if len(txt) < 10:
+        raise HTTPException(400, "회의록 내용이 너무 짧습니다.")
+    # 텍스트 파서로 표 자동 분리 시도 — '제 N 조' 두 번 등장 패턴
+    parsed_tables = []
+    try:
+        parsed_tables = _extract_meeting_tables_from_text(txt)
+        if parsed_tables:
+            print(f"[MEETING] 직접 입력 텍스트 파서로 안건 {len(parsed_tables)}건 분리")
+    except Exception as e:
+        print(f"[MEETING] 텍스트 파서 실패(무시): {e}")
+    return _analyze_meeting_minutes(txt, target_seq=target_seq, parsed_tables=parsed_tables)
+
+
+# ══════════════════════════════════════════════════════════════════
+# 회의록 분석 — 2단계 결정론적 파이프라인
+#   1단계: 텍스트 → 안건별 [헤더 + 현행 + 개정안] 분리 (규칙 기반, AI 없음)
+#   2단계: 개정안을 조 단위로 분리 + 시스템 규정 fuzzy 매칭 (AI 호출 안 함)
+# AI는 회의록 본문 추출에 절대 관여하지 않음 — 개정안을 현행으로 잘못 잡는 실수 원천 차단
+# ══════════════════════════════════════════════════════════════════
+def _extract_rule_name_from_heading(heading: str) -> str:
+    """회의록 안건 헤더에서 규정명만 추출.
+    예: '20. [5-0-2] 인문과학연구원 규정 개정(안)' → '인문과학연구원 규정'"""
+    if not heading:
+        return ""
+    h = heading.replace("\n", " ").replace("\r", " ")
+    m = _re.search(r'\d+\s*\.\s*(?:\[[\d\-]+\]\s*)?(.+?)\s*개정\s*\(?\s*안\s*\)?', h)
+    if m:
+        return m.group(1).strip()
+    return ""
+
+
+def _extract_reason_from_heading(heading: str) -> str:
+    """헤더에서 '개정 사유:' 줄을 추출"""
+    if not heading:
+        return ""
+    m = _re.search(r'개정\s*사유\s*:\s*([^\n]+)', heading)
+    return m.group(1).strip() if m else ""
+
+
+def _match_rule_by_title(history: list, name: str) -> dict:
+    """fuzzy match: 회의록 헤더의 규정명과 history.json의 title 매칭.
+    1) 공백 무시 정확 매칭 → 2) substring 양방향 → 3) 키워드 토큰 매칭"""
+    if not name:
+        return None
+    n_name = _re.sub(r'\s+', '', name)
+    # 1) 정확 매칭
+    for r in history:
+        t = (r.get("title") or "").strip()
+        if t and _re.sub(r'\s+', '', t) == n_name:
+            return r
+    # 2) substring 양방향 — 더 긴 매칭 우선
+    candidates = []
+    for r in history:
+        t = (r.get("title") or "").strip()
+        if not t:
+            continue
+        n_t = _re.sub(r'\s+', '', t)
+        if (n_t and n_name) and (n_t in n_name or n_name in n_t):
+            candidates.append((r, len(n_t)))
+    if candidates:
+        candidates.sort(key=lambda x: -x[1])
+        return candidates[0][0]
+    # 3) 핵심 키워드(첫 6자 이상 한글) 토큰 매칭
+    head_token = _re.sub(r'[^가-힣]', '', name)[:8]
+    if len(head_token) >= 4:
+        for r in history:
+            t = (r.get("title") or "").strip()
+            if head_token in _re.sub(r'\s+', '', t):
+                return r
+    return None
+
+
+def _split_text_to_articles(text: str) -> list:
+    """텍스트를 '제 N 조 (...)' 또는 '부 칙' 머리글 기준으로 조 단위 분리.
+    반환: [{"head": "제 5 조 (학점 부여)", "body": "제 5 조 ... 전체 본문"}, ...]"""
+    if not text:
+        return []
+    head_pat = _re.compile(
+        r'(?:^|\n)\s*(제\s*\d+\s*조(?:\s*의\s*\d+)?(?:\s*\([^)]*\))?|부\s*칙)',
+        _re.MULTILINE
+    )
+    matches = list(head_pat.finditer(text))
+    if not matches:
+        return []
+    out = []
+    for i, m in enumerate(matches):
+        head_raw = m.group(1).strip()
+        # 공백 정리: "제  5  조 ( 학점 부여 )" → "제 5 조 (학점 부여)"
+        head = _re.sub(r'\s+', ' ', head_raw)
+        head = _re.sub(r'\(\s+', '(', head)
+        head = _re.sub(r'\s+\)', ')', head)
+        end = matches[i+1].start() if i+1 < len(matches) else len(text)
+        body = text[m.start():end].rstrip()
+        if body:
+            out.append({"head": head, "body": body})
+    return out
+
+
+
+
+
+
+
+
+# ══════════════════════════════════════════════════════════════════
+# 회의록 분석 — AI 주도 4단계 파이프라인
+#   ① AI가 회의록 양식 판단 (표 vs 줄글) → 파싱 방식 결정
+#   ② 1차: 어떤 규정인지 판별 / 2차: 개정안 본문만 추출 (★ 원문은 절대 추출 X)
+#   ③ 시스템에서 history.json의 현행 본문을 자동으로 가져옴
+#   ④ 결과: [시스템 현행] vs [AI가 뽑은 개정안] 으로 미리보기 비교
+# "AI가 회의록의 현행을 잘못 가져오는 문제"는 AI에게 현행 추출 작업 자체를
+# 시키지 않음으로 원천 차단. 현행의 정답은 시스템에 이미 있다.
+# 보조 자료: parsed_tables(서버가 HWP 표 또는 텍스트 패턴으로 분리한 좌/우)
+# → AI가 양식 판단할 때 참고만. AI의 작업은 '개정안 추출'에 집중.
+# ══════════════════════════════════════════════════════════════════
+def _analyze_meeting_minutes(raw_text: str, target_seq: int = -1, parsed_tables: list = None) -> dict:
+    parsed_tables = parsed_tables or []
+
+    # 업로드 규정 자동 백필 — 매칭 후보에 포함되도록
+    try:
+        added = _sync_uploaded_rules_to_history()
+        if added > 0:
+            print(f"[ANALYZE] 회의록 분석 직전 업로드 규정 {added}건 백필됨")
+    except Exception as e:
+        print(f"[ANALYZE] 백필 실패(무시): {e}")
+
+    history = _load_history_json()
+    rule_titles = []
+    for r in history[:800]:
+        t = (r.get("title") or "").strip()
+        if t:
+            rule_titles.append({
+                "seq": int(r.get("seq", -1)),
+                "title": t,
+                "uploaded": bool(r.get("_uploaded")),
+            })
+
+    # 사용자가 특정 규정을 콕 찍은 경우
+    target_focus_block = ""
+    if target_seq is not None and target_seq >= 0:
+        focus = next((r for r in history if int(r.get("seq", -1)) == int(target_seq)), None)
+        if focus:
+            target_focus_block = (
+                f"\n[★ 사용자가 지정한 대상 규정]\n"
+                f"- seq={target_seq}, 제목=\"{focus.get('title','')}\"\n"
+                f"  → 이 규정의 안건만 추출하라. rule_seq는 반드시 {target_seq}.\n"
+            )
+
+    # 보조 자료: 서버가 미리 분리한 표 좌/우 (AI가 양식 판단할 때 참고)
+    tables_hint = ""
+    if parsed_tables:
+        chunks = []
+        for i, t in enumerate(parsed_tables, 1):
+            chunks.append(
+                f"\n══ [참고용 표 {i}] 헤더 컨텍스트 ══\n{(t.get('heading_before') or '')[:400]}\n"
+                f"══ [참고용 표 {i}] 좌측 셀(=현행 — 너는 절대 추출 X) ══\n{(t.get('current') or '')[:3000]}\n"
+                f"══ [참고용 표 {i}] 우측 셀(=개정안 — 여기서만 추출) ══\n{(t.get('new') or '')[:4000]}\n"
+            )
+        tables_hint = (
+            "\n[★ 서버가 미리 분리한 좌/우 셀 — 양식 판단 보조 자료]\n"
+            "표 양식일 때 좌측=현행, 우측=개정안. 너는 우측에서만 본문을 가져와라.\n"
+            + "".join(chunks)
+        )
+
+    titles_for_ai = "\n".join([
+        f"- [seq={x['seq']}] {x['title']}" + (" (업로드)" if x.get('uploaded') else "")
+        for x in rule_titles
+    ])
+    doc_for_ai = raw_text[:16000]
+
+    import json as _pyjson
+    prompt = f"""너는 대학 규정 개정 회의록을 분석하는 도우미다.
+
+[너의 임무 — 4단계 정확히 수행]
+
+(1) 회의록 양식 판단
+    먼저 회의록이 어떤 양식인지 판단하라:
+    - 표 양식: "현행규정 | 개정(안)" 두 컬럼이 표로 나란히
+    - 줄글 양식: "현행:" 단락 다음 "개정(안):" 단락 식으로 순차
+    이 판단에 따라 파싱 방식이 달라진다. format_detected에 'table' 또는 'prose' 적어라.
+
+(2) 1차 — 규정 판별
+    회의록에서 다루는 규정을 [시스템 규정 목록]에서 찾아 rule_seq에 적어라.
+    안건이 여러 개면 각각 다른 rule_seq를 가질 수 있다. 매칭 애매하면 match_confidence='low'.
+
+(3) 2차 — 개정안 본문만 추출 ★★★ 가장 중요
+    ★ 원문(현행)은 절대 추출 X. 시스템에 이미 있어서 우리가 알아서 가져온다.
+    ★ 오직 '개정(안)' 컬럼/섹션의 본문만 new_text에 채워라.
+    - 표 양식: 우측 컬럼(개정안)의 본문만
+    - 줄글 양식: "개정(안):" 헤더 다음 본문만
+    회의록에 같은 조 번호가 두 번 등장하면(첫=현행, 둘=개정안), 반드시 두 번째 것만.
+    new_text가 회의록의 현행 본문과 비슷하면 잘못 뽑은 것 — 다시 확인하라.
+
+(4) 조 단위 분리
+    한 안건에 여러 조 개정이 있으면 반드시 조마다 별개 항목으로.
+    현행과 개정안이 완전히 동일한 조는 빼라.
+    부 칙도 별개 항목 (article_head="부 칙", scope="article").
+
+(5) 텍스트 정돈 — new_text를 깔끔하게 다듬어라
+    PDF/HWP에서 추출된 텍스트는 줄바꿈과 공백이 이상하게 끊겨 있는 경우가 많다.
+    추출한 new_text는 사람이 읽기 좋게 다음 규칙으로 정리하라:
+    - 어절(단어) 가운데에서 끊긴 줄바꿈은 제거하라. 예: "협동을 통해 종합적\\n연구를" → "협동을 통해 종합적 연구를"
+    - 한 문장 안의 부적절한 줄바꿈은 공백으로 바꾼다.
+    - 항목 번호("1. ", "2. ", "①" 등)와 새 조("제 N 조") 앞에는 줄바꿈을 넣어 가독성 확보.
+    - 연속된 공백은 한 칸으로.
+    - 의미가 깨지지 않는 선에서, 원문에 없는 내용은 절대 추가하지 마라 (정돈만 하라).
+{target_focus_block}{tables_hint}
+
+[시스템 규정 목록 — 제목으로 매칭]
+{titles_for_ai}
+
+[회의록 텍스트 — 분석 대상]
+{doc_for_ai}
+
+[출력 JSON 스키마 — JSON 배열만, 코드블록·머리말 금지]
+[
+  {{
+    "rule_seq":         정수 (시스템 규정 목록의 seq 그대로),
+    "rule_title":       "매칭된 규정명",
+    "article_head":     "제 5 조 (학점 부여)" 또는 "부 칙",
+    "scope":            "article" (기본) | "regulation" (전체 다시 쓴 경우만),
+    "new_text":         "★ 개정안 본문만. 현행 절대 포함 X. 조 머리글부터 끝까지.",
+    "reason":           "개정 사유 한 줄",
+    "match_confidence": "high" | "medium" | "low",
+    "format_detected":  "table" | "prose"
+  }}
+]
+
+위 형식 그대로 JSON 배열만 출력하라."""
+
+    try:
+        ai_raw = claude_chat(
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=6000,
+            temperature=0,
+        )
+    except Exception as e:
+        raise HTTPException(500, f"AI 분석 실패: {e}")
+    ai_raw = (ai_raw or "").strip()
+    if ai_raw.startswith("```"):
+        ai_raw = _re.sub(r'^```(?:json)?\s*', '', ai_raw)
+        ai_raw = _re.sub(r'```\s*$', '', ai_raw).strip()
+
+    try:
+        ai_items = _pyjson.loads(ai_raw)
+        if not isinstance(ai_items, list):
+            raise ValueError("배열이 아님")
+    except Exception as e:
+        return {
+            "items": [],
+            "raw_text": raw_text,
+            "raw_truncated": len(raw_text) > 16000,
+            "table_count": len(parsed_tables),
+            "ai_error": f"AI 응답 파싱 실패: {e}",
+            "ai_raw": ai_raw[:2000],
+            "stage1": [],
+            "format_detected": "",
+        }
+
+    # ── 시스템에서 현행 본문 자동 매칭 + 채움 ──
+    enriched = []
+    stage1_debug = []
+    detected_formats = set()
+    for it in ai_items:
+        try:
+            seq = int(it.get("rule_seq", -1))
+        except Exception:
+            seq = -1
+        rule_title_ai = (it.get("rule_title") or "").strip()
+        article_head = (it.get("article_head") or "").strip()
+        scope = (it.get("scope") or "article").lower().strip()
+        new_text = (it.get("new_text") or "").strip()
+        # 가벼운 후처리 — AI가 놓친 줄바꿈/공백 마무리
+        if new_text:
+            # 연속 공백을 한 칸으로 (탭 포함, 줄바꿈은 보존)
+            new_text = _re.sub(r'[ \t]+', ' ', new_text)
+            # 줄 끝 공백 제거
+            new_text = _re.sub(r' +\n', '\n', new_text)
+            # 줄바꿈이 3개 이상이면 2개로 (단락 구분만 유지)
+            new_text = _re.sub(r'\n{3,}', '\n\n', new_text)
+            new_text = new_text.strip()
+        reason = (it.get("reason") or "").strip()
+        confidence = (it.get("match_confidence") or "medium").lower().strip()
+        fmt = (it.get("format_detected") or "").lower().strip()
+        if fmt:
+            detected_formats.add(fmt)
+
+        # seq로 규정 찾기 (seq 매칭이 안 되면 제목 fuzzy)
+        target = next((r for r in history if int(r.get("seq", -1)) == seq), None)
+        if target is None and rule_title_ai:
+            target = _match_rule_by_title(history, rule_title_ai)
+            if target is not None:
+                seq = int(target.get("seq", -1))
+
+        article_index = -1
+        current_text = ""
+        if target is not None:
+            latest = _get_latest_version(target)
+            content = (latest or {}).get("content", "") or ""
+            if scope == "regulation":
+                current_text = content
+            else:
+                sys_arts = _split_articles(content)
+                norm_head = _re.sub(r'\s+', '', article_head)
+                for ai_idx, sa in enumerate(sys_arts):
+                    sa_head = sa["head"] + sa.get("dup_label", "")
+                    if _re.sub(r'\s+', '', sa_head) == norm_head:
+                        article_index = ai_idx
+                        current_text = content[sa["start"]:sa["end"]].rstrip()
+                        break
+                if article_index == -1:
+                    m_a = _re.search(r'제\s*(\d+)\s*조(?:\s*의\s*(\d+))?', article_head)
+                    if m_a:
+                        wa, wb = m_a.group(1), m_a.group(2) or ""
+                        for ai_idx, sa in enumerate(sys_arts):
+                            m_s = _re.search(r'제\s*(\d+)\s*조(?:\s*의\s*(\d+))?', sa["head"])
+                            if m_s and m_s.group(1) == wa and (m_s.group(2) or "") == wb:
+                                article_index = ai_idx
+                                current_text = content[sa["start"]:sa["end"]].rstrip()
+                                break
+
+        new_ok = bool(new_text) and len(new_text) >= 5
+        applyable = (target is not None and new_ok
+                     and (scope == "regulation" or article_index >= 0))
+
+        note = ""
+        if target is None:
+            note = "시스템에 등록된 규정과 매칭되지 않음"
+        elif not new_ok:
+            note = "AI가 개정안 본문을 추출하지 못함"
+        elif scope == "article" and article_index < 0 and article_head != "부 칙":
+            note = "현행에 같은 조가 없음 — 신설일 수 있습니다"
+
+        enriched.append({
+            "rule_title":       (target.get("title") if target else rule_title_ai) or "(규정 미특정)",
+            "rule_seq":         seq if target else -1,
+            "scope":            scope,
+            "article_head":     article_head,
+            "article_index":    article_index,
+            "current_text":     current_text,
+            "new_text":         new_text,
+            "reason":           reason,
+            "match_confidence": confidence,
+            "format_detected":  fmt,
+            "note":             note,
+            "matched":          applyable,
+        })
+
+        stage1_debug.append({
+            "rule_seq":        seq,
+            "rule_title":      rule_title_ai,
+            "matched_title":   (target.get("title") if target else None),
+            "article_head":    article_head,
+            "format_detected": fmt,
+            "new_preview":     new_text[:200],
+            "new_length":      len(new_text),
+        })
+
+    # ── 조 단위 항목을 안건(rule_seq) 단위로 통합 ──
+    # 사용자가 카드 여러 개 보면 정신없으니 한 안건 = 한 카드로 합친다.
+    # new_text = 시스템 현행에서 변경된 조만 교체 + 신설 조(부 칙 등) 끝에 추가
+    from collections import OrderedDict
+    groups = OrderedDict()
+    unmatched_items = []
+    for it in enriched:
+        seq = int(it.get("rule_seq", -1))
+        if seq < 0:
+            unmatched_items.append(it)
+            continue
+        groups.setdefault(seq, []).append(it)
+
+    consolidated = []
+    for seq, group in groups.items():
+        target = next((r for r in history if int(r.get("seq", -1)) == seq), None)
+        if target is None:
+            consolidated.extend(group)
+            continue
+        latest = _get_latest_version(target)
+        sys_content = (latest or {}).get("content", "") or ""
+        sys_articles = _split_articles(sys_content)
+
+        used_idx = set()
+        changed_heads = []   # 표시용: 변경된 조 머리글들
+        new_parts = []
+        # 시스템의 각 조를 순회: 그룹에 같은 조 있으면 그것으로 교체, 없으면 그대로
+        for sa in sys_articles:
+            sa_head = (sa["head"] + sa.get("dup_label", "")).strip()
+            sa_norm = _re.sub(r'\s+', '', sa_head)
+            replaced = None
+            for gi, gitem in enumerate(group):
+                if gi in used_idx:
+                    continue
+                gh = _re.sub(r'\s+', '', (gitem.get("article_head") or ""))
+                if gh == sa_norm:
+                    replaced = gitem
+                    used_idx.add(gi)
+                    break
+            # 조 번호만 같은지 fallback
+            if replaced is None:
+                m_s = _re.search(r'제\s*(\d+)\s*조(?:\s*의\s*(\d+))?', sa_head)
+                if m_s:
+                    wa, wb = m_s.group(1), m_s.group(2) or ""
+                    for gi, gitem in enumerate(group):
+                        if gi in used_idx:
+                            continue
+                        m_g = _re.search(r'제\s*(\d+)\s*조(?:\s*의\s*(\d+))?', (gitem.get("article_head") or ""))
+                        if m_g and m_g.group(1) == wa and (m_g.group(2) or "") == wb:
+                            replaced = gitem
+                            used_idx.add(gi)
+                            break
+            if replaced is not None and (replaced.get("new_text") or "").strip():
+                new_parts.append(replaced["new_text"].rstrip())
+                changed_heads.append(sa_head)
+            else:
+                new_parts.append(sys_content[sa["start"]:sa["end"]].rstrip())
+
+        # 그룹에 남은 항목 = 신설 조/부 칙 → 끝에 추가
+        for gi, gitem in enumerate(group):
+            if gi in used_idx:
+                continue
+            body = (gitem.get("new_text") or "").strip()
+            if body:
+                new_parts.append(body)
+                head = (gitem.get("article_head") or "(신설)").strip()
+                changed_heads.append(head + " (신설)")
+
+        new_full_text = "\n\n".join(p for p in new_parts if p)
+
+        # 통합 카드 생성
+        first = group[0]
+        consolidated.append({
+            "rule_title":       target.get("title", first.get("rule_title", "")),
+            "rule_seq":         seq,
+            "scope":            "regulation",
+            "article_head":     "",
+            "article_index":    -1,
+            "current_text":     sys_content,
+            "new_text":         new_full_text,
+            "reason":           first.get("reason", ""),
+            "match_confidence": first.get("match_confidence", "medium"),
+            "format_detected":  first.get("format_detected", ""),
+            "note":             ("변경/신설: " + ", ".join(changed_heads)) if changed_heads else "변경 사항 없음",
+            "matched":          bool(new_full_text.strip()) and len(new_full_text) >= 10,
+            "changed_articles": changed_heads,
+        })
+
+    # 매칭 안 된 항목은 그대로 (목록 끝에 별도 표시용)
+    consolidated.extend(unmatched_items)
+
+    return {
+        "items":           consolidated,
+        "raw_text":        raw_text,
+        "raw_truncated":   len(raw_text) > 16000,
+        "table_count":     len(parsed_tables),
+        "format_detected": ",".join(sorted(detected_formats)) if detected_formats else "",
+        "stage1":          stage1_debug,
+    }
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -3150,4 +4149,12 @@ def format_check(req: FormatCheckQ, payload: dict = Depends(verify_token)):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8080)
+    # 필수 HTML 파일 존재 여부 확인 (없으면 페이지 못 띄움)
+    print("=" * 60)
+    print(f"[Startup] BASE_DIR: {BASE_DIR}")
+    for fn in ["index.html", "login.html", "upload.html"]:
+        p = os.path.join(BASE_DIR, fn)
+        mark = "✓" if os.path.exists(p) else "✗ 없음!"
+        print(f"[Startup] {mark}  {fn}")
+    print("=" * 60)
+    uvicorn.run(app, host="0.0.0.0", port=8000)
