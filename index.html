@@ -10,66 +10,146 @@
   --blue: #003087; --blue-mid: #0050B3; --blue-pale: #EEF3FB;
   --blue-border: #C5D4ED; --bg: #F0F4FA; --white: #FFFFFF;
   --text: #1A2340; --text-muted: #6B7A99; --border: #D1DCF0;
+  --leftnav-bg: #5B4FCF; --leftnav-hover: rgba(255,255,255,0.12); --leftnav-active: rgba(255,255,255,0.22);
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { margin: 0 !important; padding: 0 !important; }
-body { font-family: 'Noto Sans KR', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+body { font-family: 'Noto Sans KR', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; }
 
-header {
-  background:
-    radial-gradient(ellipse 45% 80% at 93% 10%, rgba(249,115,22,0.20) 0%, transparent 68%),
-    radial-gradient(ellipse 60% 100% at 50% -10%, rgba(96,165,250,0.16) 0%, transparent 65%),
-    linear-gradient(148deg, #001254 0%, #002070 35%, #003899 70%, #0050B8 100%);
-  position: relative; overflow: hidden;
+/* ── 왼쪽 고정 네비게이션 ── */
+.left-nav {
+  width: 200px; min-width: 200px; flex-shrink: 0;
+  background: linear-gradient(to top,
+    #1A1040 0%,
+    #2D1F6E 28%,
+    #3D2D9A 55%,
+    #5B4FCF 100%);
+  display: flex; flex-direction: column;
+  position: fixed; left: 0; top: 0; bottom: 0;
+  z-index: 100;
+  box-shadow: 4px 0 24px rgba(60,40,160,0.18);
 }
-header::before {
-  content:''; position:absolute; width:520px; height:520px; border-radius:50%;
-  background:rgba(255,255,255,0.025); top:-220px; right:-100px; pointer-events:none;
+.left-nav-brand {
+  padding: 28px 20px 22px;
+  border-bottom: 1px solid rgba(255,255,255,0.12);
 }
-header::after {
-  content:''; position:absolute; bottom:0; left:0; right:0; height:2px;
-  background:linear-gradient(90deg, transparent 0%, #60A5FA 28%, #F97316 58%, transparent 100%);
+.left-nav-brand-label {
+  font-size: 10px; font-weight: 700; letter-spacing: 2.5px; text-transform: uppercase;
+  color: rgba(255,255,255,0.5); margin-bottom: 6px;
 }
-header .grid-overlay {
-  position:absolute; inset:0; pointer-events:none;
-  background-image: linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
-                    linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
-  background-size: 40px 40px;
+.left-nav-brand-name {
+  font-size: 22px; font-weight: 800; color: #fff; letter-spacing: -0.3px; line-height: 1.25;
 }
-.header-inner { max-width: 1400px; margin: 0 auto; padding: 40px 48px 36px; display: flex; align-items: center; justify-content: space-between; position: relative; gap: 32px; }
-.header-left { flex: 1; text-align: left; }
-.header-badge { display: inline-flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.2); color: #93C5FD; font-size: 11px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; padding: 5px 14px; border-radius: 20px; margin-bottom: 18px; }
-header h1 { font-size: 48px; font-weight: 800; color: #fff; line-height: 1.2; margin-bottom: 12px; letter-spacing: -1px; text-align: left; }
-header h1 span { color: #93C5FD; }
-header p { font-size: 15px; color: rgba(255,255,255,0.72); font-weight: 300; text-align: left; }
-.header-logo { display: flex; flex-direction: column; align-items: center; gap: 6px; flex-shrink: 0; margin-left: 32px; }
-.logo-mark { width: 150px; height: 150px; background: rgba(255,255,255,0.95); border-radius: 50%; padding: 8px; display: flex; align-items: center; justify-content: center; box-shadow: 0 8px 32px rgba(0,0,0,0.25); }
-.logo-mark img { width: 134px; height: 134px; object-fit: contain; }
-.mode-toggle { display: inline-flex; align-items: center; background: rgba(255,255,255,0.10); border: 1px solid rgba(255,255,255,0.20); border-radius: 28px; padding: 3px; gap: 2px; margin-top: 16px; box-shadow: 0 2px 12px rgba(0,0,0,0.15); }
-.mode-btn { font-size: 12px; font-weight: 600; color: rgba(255,255,255,0.55); padding: 6px 16px; border-radius: 20px; cursor: pointer; transition: all 0.22s; user-select: none; white-space: nowrap; }
-.mode-btn.active { background: linear-gradient(135deg, #003087, #0050B3); color: #fff; box-shadow: 0 2px 10px rgba(0,48,135,0.40); }
-.mode-btn:not(.active):hover { background: rgba(255,255,255,0.15); color: rgba(255,255,255,0.9); }
-#btnAdmin { border: 1px solid rgba(255,255,255,0.3); }
-#btnAdmin:hover { background: rgba(255,255,255,0.2); color: #fff; }
+.left-nav-brand-name span { color: #93C5FD; }
+.left-nav-menu { padding: 18px 12px; display: flex; flex-direction: column; gap: 4px; flex: 1; }
+.left-nav-item {
+  display: flex; align-items: center; gap: 11px;
+  padding: 12px 14px; border-radius: 12px;
+  font-size: 14px; font-weight: 600; color: rgba(255,255,255,0.7);
+  cursor: pointer; transition: all 0.18s; user-select: none;
+  border: none; background: none; width: 100%; text-align: left;
+  font-family: 'Noto Sans KR', sans-serif;
+}
+.left-nav-item:hover { background: var(--leftnav-hover); color: #fff; }
+.left-nav-item.active { background: var(--leftnav-active); color: #fff; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.2); }
+.left-nav-item-icon { font-size: 16px; flex-shrink: 0; width: 22px; text-align: center; }
 
-.nav-bar { background: #001E5C; border-bottom: 1px solid rgba(255,255,255,0.08); }
-.nav-inner { max-width: 960px; margin: 0 auto; padding: 0 32px; display: flex; align-items: center; }
-.nav-item { font-size: 13px; font-weight: 500; color: rgba(255,255,255,0.5); padding: 10px 16px; cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.15s; white-space: nowrap; }
-.nav-item.active { color: #fff; border-bottom-color: #60A5FA; }
-.nav-item:hover { color: rgba(255,255,255,0.85); }
-.nav-spacer { flex: 1; }
+.left-nav-footer-badge {
+  display: inline-flex; align-items: center;
+  background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.22);
+  color: #93C5FD; font-size: 8px; font-weight: 700;
+  letter-spacing: 1.5px; text-transform: uppercase;
+  padding: 3px 8px; border-radius: 20px; margin-bottom: 10px;
+}
+.left-nav-divider {
+  height: 1px; background: rgba(255,255,255,0.15);
+  margin: 4px 14px 10px;
+}
+.left-nav-admin {
+  margin: 0 12px 16px;
+  display: flex; align-items: center; gap: 10px;
+  padding: 11px 14px; border-radius: 12px;
+  font-size: 13px; font-weight: 700; color: rgba(255,255,255,0.85);
+  cursor: pointer; transition: all 0.18s;
+  background: rgba(255,255,255,0.10);
+  border: 1px solid rgba(255,255,255,0.18);
+  font-family: 'Noto Sans KR', sans-serif;
+  text-decoration: none;
+}
+/* 왼쪽 네비 하단 텍스트 */
+.left-nav-footer {
+  margin: 0 0 4px;
+  padding: 16px 20px 20px;
+  border-top: 1px solid rgba(255,255,255,0.12);
+  flex-shrink: 0;
+}
+.left-nav-footer-title {
+  font-size: 17px; font-weight: 800; color: #fff;
+  line-height: 1.3; letter-spacing: -0.5px;
+  margin-bottom: 7px;
+}
+.left-nav-footer-title span { color: #93C5FD; }
+.left-nav-footer-sub {
+  font-size: 10px; color: rgba(255,255,255,0.5);
+  font-weight: 400; line-height: 1.7;
+}
+
+/* ── 메인 영역 왼쪽 여백 처리 ── */
+.app-root { margin-left: 200px; flex: 1; min-width: 0; display: flex; flex-direction: column; min-height: 100vh; background: #5B4FCF; }
+
+/* nav-bar/header 호환 (숨김) */
+.nav-bar { display: none; }
+header { display: none; }
 
 
 /* 앱 레이아웃 */
-.app-body { display: flex; min-height: calc(100vh - 160px); }
+.app-body { display: flex; min-height: 100vh; flex: 1; background: #5B4FCF; }
 
-/* 사이드바 */
-.sidebar { width: 64px; min-width: 64px; background: #fff; border-right: 1px solid #D1DCF0; transition: width 0.28s cubic-bezier(0.4,0,0.2,1); overflow: hidden; flex-shrink: 0; box-shadow: 2px 0 16px rgba(0,48,135,0.07); position: sticky; top: 0; height: 100vh; }
-.sidebar.open { width: 272px; }
+/* 오른쪽 사이드바 바깥 흰색 래퍼 */
+.sidebar-wrap {
+  background: transparent;
+  display: flex;
+  flex-shrink: 0;
+  order: 2;
+  position: sticky; top: 0; height: 100vh;
+  transition: width 0.28s cubic-bezier(0.4,0,0.2,1);
+}
+
+/* ── 메인 영역 그라데이션 배경 ── */
+main {
+  flex: 1; min-width: 0; max-width: none; margin: 4px 4px 4px 0;
+  padding: 28px 32px 60px; width: 100%; transition: padding 0.25s;
+  background: linear-gradient(to top,
+    #7B6EE8 0%,
+    #8B9FE8 18%,
+    #B8C8F5 38%,
+    #D8E4FA 55%,
+    #EEF2FC 72%,
+    #ffffff 100%);
+  min-height: calc(100vh - 8px);
+  border: 2px solid #5B4FCF;
+  border-radius: 16px 24px 24px 16px;
+  box-sizing: border-box;
+}
+main.chat-mode { padding: 12px 48px 24px; }
+
+/* 사이드바 (채팅 히스토리) — 오른쪽으로 이동 */
+.sidebar {
+  width: 64px; min-width: 64px;
+  background: #fff;
+  transition: width 0.28s cubic-bezier(0.4,0,0.2,1);
+  overflow: hidden; flex-shrink: 0;
+  margin: 4px 4px 4px 0;
+  border-radius: 16px;
+  height: calc(100vh - 8px);
+  border: 1px solid #D1DCF0;
+  box-shadow: -2px 0 16px rgba(0,48,135,0.07);
+}
+.sidebar.open { width: 288px; }
 .sidebar-toggle { width: 64px; height: 64px; display: flex; align-items: center; justify-content: center; cursor: pointer; border-bottom: 1px solid #EEF3FB; transition: background 0.18s; }
 .sidebar-toggle-icon { width: 36px; height: 36px; border-radius: 50%; background: #F0F4FA; display: flex; align-items: center; justify-content: center; font-size: 16px; color: #6B7A99; transition: all 0.18s; box-shadow: 0 1px 4px rgba(0,48,135,0.08); }
 .sidebar-toggle:hover .sidebar-toggle-icon { background: #EEF3FB; color: #003087; box-shadow: 0 2px 8px rgba(0,48,135,0.14); transform: scale(1.07); }
-.sidebar-content { opacity: 0; pointer-events: none; transition: opacity 0.15s; min-width: 272px; padding: 14px 12px; text-align: left; }
+.sidebar-content { opacity: 0; pointer-events: none; transition: opacity 0.15s; min-width: 288px; padding: 14px 12px; text-align: left; }
 .sidebar.open .sidebar-content { opacity: 1; pointer-events: auto; transition: opacity 0.22s 0.1s; }
 .sidebar-title { font-size: 10px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: #6B7A99; margin-bottom: 12px; padding: 4px 6px 10px; border-bottom: 1px solid #EEF3FB; display: flex; justify-content: space-between; align-items: center; }
 .sidebar-clear { font-size: 10px; color: #B0BDD4; cursor: pointer; padding: 3px 8px; border-radius: 20px; transition: all 0.15s; }
@@ -87,8 +167,6 @@ header p { font-size: 15px; color: rgba(255,255,255,0.72); font-weight: 300; tex
 .history-item:hover .history-del-btn { opacity: 1; }
 .history-del-btn:hover { background: #FFF0F0; color: #C0392B; }
 
-main { flex: 1; min-width: 0; max-width: none; margin: 0; padding: 28px 32px 60px; width: 100%; transition: padding 0.25s; }
-main.chat-mode { padding: 12px 48px 24px; }
 .page { display: none; }
 .page.active { display: block; }
 
@@ -221,16 +299,19 @@ textarea::placeholder { color: #B0BDD4; }
 
 
 @media (max-width:640px) {
-  header h1 { font-size: 26px; }
-  .header-logo { display: none; }
+  .left-nav { width: 60px; min-width: 60px; }
+  .left-nav-brand-name { font-size: 11px; }
+  .left-nav-brand-label { display: none; }
+  .left-nav-item span:not(.left-nav-item-icon) { display: none; }
+  .left-nav-admin span:last-child { display: none; }
+  .app-root { margin-left: 60px; }
   .search-row { flex-direction: column; }
   main { padding: 20px 16px 60px; }
   main.chat-mode { padding: 12px 16px 16px; }
-  .header-inner { padding: 24px 16px 20px; }
   .rule-dept { display: none; }
   .followup-grid { grid-template-columns: 1fr; }
-  .chat-input-wrap { left: 64px !important; padding: 10px 16px 8px; }
-  body.sidebar-open .chat-input-wrap { left: 64px !important; }
+  .chat-input-wrap { left: 60px !important; right: 64px !important; padding: 10px 16px 8px; }
+  body.sidebar-open .chat-input-wrap { right: 288px !important; }
 }
 /* ── Diff Modal ── */
 .diff-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:9999; display:none; align-items:center; justify-content:center; padding:16px; }
@@ -322,12 +403,21 @@ div.chat-empty p { font-size: 14px; line-height: 1.85; }
 .chat-loading .dots::after { content: ''; animation: dots 1.4s steps(4, end) infinite; }
 @keyframes dots { 0% { content: ''; } 25% { content: '.'; } 50% { content: '..'; } 75% { content: '...'; } }
 
-/* 입력창 — sticky 아래에 고정 */
 /* 입력창 — 화면 하단 항상 고정 (fixed) */
-.chat-input-wrap { position: fixed; left: 64px; right: 0; bottom: 0;
-  padding: 14px 48px 12px; background: var(--bg); z-index: 50;
-  transition: left 0.28s cubic-bezier(0.4,0,0.2,1); }
-body.sidebar-open .chat-input-wrap { left: 272px; }
+.chat-input-wrap {
+  position: fixed; left: 200px; right: 64px; bottom: 0;
+  padding: 14px 48px 12px; background: transparent; z-index: 50;
+  transition: right 0.28s cubic-bezier(0.4,0,0.2,1);
+}
+.chat-input-wrap::before {
+  content: ''; position: absolute; inset: 0; z-index: -1;
+  background: linear-gradient(to top,
+    rgba(123, 110, 232, 0.09) 0%,
+    rgba(139, 159, 232, 0.04) 50%,
+    transparent 100%);
+  pointer-events: none;
+}
+body.sidebar-open .chat-input-wrap { right: 288px; }
 .chat-input-inner { max-width: 880px; margin: 0 auto; }
 body.chat-empty .chat-input-inner { max-width: 720px; }
 .chat-input-box { display: flex; align-items: flex-end; gap: 10px; background: #fff;
@@ -365,14 +455,41 @@ body.chat-empty .chat-input-inner { max-width: 720px; }
 
 /* 새 질문 버튼 (사이드바) */
 .new-chat-btn { width: 100%; height: 40px; margin-bottom: 12px; border: none; border-radius: 11px;
-  background: linear-gradient(150deg, #003087, #0060CC); color: #fff; font-size: 13px; font-weight: 700;
+  background: linear-gradient(to top, #3D2D9A, #5B4FCF); color: #fff; font-size: 13px; font-weight: 700;
   cursor: pointer; font-family: 'Noto Sans KR', sans-serif; transition: all 0.15s; }
 .new-chat-btn:hover { transform: translateY(-1px); box-shadow: 0 5px 14px rgba(0,48,135,0.3); }
 </style>
 </head>
 <body>
 
-<header>
+<!-- 왼쪽 고정 네비게이션 -->
+<nav class="left-nav">
+  <div class="left-nav-brand">
+    <div class="left-nav-footer-badge">AI-POWERED · REGULATION MASTER</div>
+    <div class="left-nav-brand-name"><span>Hansung</span><br>Reg MASTER</div>
+  </div>
+  <div class="left-nav-menu">
+    <button class="left-nav-item" id="navAdmin" onclick="window.location.href='/login-page'">
+      <span class="left-nav-item-icon"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span><span>관리자</span>
+    </button>
+
+    <button class="left-nav-item active" id="navSearch" onclick="switchLeftNav('search')">
+      <span class="left-nav-item-icon"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span><span>규정 검색</span>
+    </button>
+    <button class="left-nav-item" id="navList" onclick="switchLeftNav('list')">
+      <span class="left-nav-item-icon"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg></span><span>규정 목록</span>
+    </button>
+  </div>
+
+  <!-- 하단 텍스트 -->
+  <div class="left-nav-footer">
+    <div class="left-nav-footer-title">한성대학교<br><span>규정 마스터</span></div>
+    <div class="left-nav-footer-sub">규정 기반으로만 답변합니다<br>근거 조항을 명시합니다</div>
+  </div>
+</nav>
+
+<!-- 숨겨진 header/nav-bar (기능 유지용) -->
+<header style="display:none">
   <div class="grid-overlay"></div>
   <div class="header-inner">
     <div class="header-left">
@@ -388,32 +505,18 @@ body.chat-empty .chat-input-inner { max-width: 720px; }
     </div>
   </div>
 </header>
-
-<div class="nav-bar">
+<div class="nav-bar" style="display:none">
   <div class="nav-inner">
-    <div class="nav-item active" onclick="showPage('search', this)">규정 검색</div>
-    <div class="nav-item" onclick="showPage('list', this)">규정 목록</div>
+    <div class="nav-item active" id="navItemSearch" onclick="showPage('search', this)">규정 검색</div>
+    <div class="nav-item" id="navItemList" onclick="showPage('list', this)">규정 목록</div>
     <div class="nav-spacer"></div>
   </div>
 </div>
 
+<!-- 앱 루트 -->
+<div class="app-root">
 <!-- 앱 바디 -->
 <div class="app-body">
-
-  <!-- 사이드바 -->
-  <div class="sidebar" id="sidebar">
-    <div class="sidebar-toggle" onclick="toggleSidebar()">
-      <div class="sidebar-toggle-icon" id="sidebarIcon">☰</div>
-    </div>
-    <div class="sidebar-content" id="sidebarContent">
-      <button class="new-chat-btn" onclick="newChat()">+ 새 질문</button>
-      <div class="sidebar-title">
-        <span>대화 내역</span>
-        <span class="sidebar-clear" onclick="clearHistory()">전체 삭제</span>
-      </div>
-      <div id="historyList"></div>
-    </div>
-  </div>
 
   <main>
     <!-- 검색 페이지 (대화형 챗봇) -->
@@ -425,19 +528,19 @@ body.chat-empty .chat-input-inner { max-width: 720px; }
             <div class="chat-welcome-sub">한성대학교 규정에 대해 무엇이든 물어보세요.</div>
             <div class="chat-suggest-list">
               <button class="chat-suggest-btn" onclick="suggestAsk(this)" data-q="수강신청 방법을 알려주세요">
-                <span class="chat-suggest-icon">📝</span><span>수강신청 방법을 알려주세요</span>
+                <span class="chat-suggest-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg></span><span>수강신청 방법을 알려주세요</span>
               </button>
               <button class="chat-suggest-btn" onclick="suggestAsk(this)" data-q="학생 징계 종류는 무엇인가요?">
-                <span class="chat-suggest-icon">📋</span><span>학생 징계 종류는 무엇인가요?</span>
+                <span class="chat-suggest-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="4" rx="1"/><path d="M4 6h16v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6z"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="15" y2="16"/></svg></span><span>학생 징계 종류는 무엇인가요?</span>
               </button>
               <button class="chat-suggest-btn" onclick="suggestAsk(this)" data-q="장학금 신청 절차를 알려주세요">
-                <span class="chat-suggest-icon">🎓</span><span>장학금 신청 절차를 알려주세요</span>
+                <span class="chat-suggest-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg></span><span>장학금 신청 절차를 알려주세요</span>
               </button>
               <button class="chat-suggest-btn" onclick="suggestAsk(this)" data-q="휴학은 최대 몇 년까지 가능한가요?">
-                <span class="chat-suggest-icon">📅</span><span>휴학은 최대 몇 년까지 가능한가요?</span>
+                <span class="chat-suggest-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span><span>휴학은 최대 몇 년까지 가능한가요?</span>
               </button>
               <button class="chat-suggest-btn" onclick="suggestAsk(this)" data-q="졸업 이수 학점 기준은요?">
-                <span class="chat-suggest-icon">📖</span><span>졸업 이수 학점 기준은요?</span>
+                <span class="chat-suggest-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></span><span>졸업 이수 학점 기준은요?</span>
               </button>
             </div>
           </div>
@@ -479,7 +582,25 @@ body.chat-empty .chat-input-inner { max-width: 720px; }
     </div>
   </main>
 
+  <!-- 사이드바 (오른쪽) -->
+  <div class="sidebar-wrap">
+    <div class="sidebar" id="sidebar">
+      <div class="sidebar-toggle" onclick="toggleSidebar()">
+        <div class="sidebar-toggle-icon" id="sidebarIcon">☰</div>
+      </div>
+      <div class="sidebar-content" id="sidebarContent">
+        <button class="new-chat-btn" onclick="newChat()">+ 새 질문</button>
+        <div class="sidebar-title">
+          <span>대화 내역</span>
+          <span class="sidebar-clear" onclick="clearHistory()">전체 삭제</span>
+        </div>
+        <div id="historyList"></div>
+      </div>
+    </div>
+  </div>
+
 </div><!-- /.app-body -->
+</div><!-- /.app-root -->
 
 
 
@@ -488,6 +609,18 @@ body.chat-empty .chat-input-inner { max-width: 720px; }
 const API = "";
 let rulesData = null;
 
+
+/* ── 왼쪽 네비 전환 ── */
+function switchLeftNav(name) {
+  // 왼쪽 nav 버튼 active 갱신
+  ['navSearch','navList'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.toggle('active', id === 'nav' + name.charAt(0).toUpperCase() + name.slice(1));
+  });
+  // 기존 showPage 호출 (숨겨진 nav-item 사용)
+  const fakeEl = document.getElementById('navItem' + name.charAt(0).toUpperCase() + name.slice(1));
+  showPage(name, fakeEl || document.createElement('div'));
+}
 
 /* ── 페이지 전환 ── */
 function showPage(name, el) {
@@ -580,7 +713,7 @@ function restoreHistory(id) {
   currentChat = item;
   renderChatStream();
   renderHistory();
-  showPage('search', document.querySelectorAll('.nav-item')[0]);
+  switchLeftNav('search');
 }
 
 function clearHistory() {
@@ -970,11 +1103,11 @@ function renderChatStream() {
       <div class="chat-welcome-title">반가워요!<br>무엇을 도와드릴까요?</div>
       <div class="chat-welcome-sub">한성대학교 규정에 대해 무엇이든 물어보세요.</div>
       <div class="chat-suggest-list">
-        <button class="chat-suggest-btn" onclick="suggestAsk(this)" data-q="수강신청 방법을 알려주세요"><span class="chat-suggest-icon">📝</span><span>수강신청 방법을 알려주세요</span></button>
-        <button class="chat-suggest-btn" onclick="suggestAsk(this)" data-q="학생 징계 종류는 무엇인가요?"><span class="chat-suggest-icon">📋</span><span>학생 징계 종류는 무엇인가요?</span></button>
-        <button class="chat-suggest-btn" onclick="suggestAsk(this)" data-q="장학금 신청 절차를 알려주세요"><span class="chat-suggest-icon">🎓</span><span>장학금 신청 절차를 알려주세요</span></button>
-        <button class="chat-suggest-btn" onclick="suggestAsk(this)" data-q="휴학은 최대 몇 년까지 가능한가요?"><span class="chat-suggest-icon">📅</span><span>휴학은 최대 몇 년까지 가능한가요?</span></button>
-        <button class="chat-suggest-btn" onclick="suggestAsk(this)" data-q="졸업 이수 학점 기준은요?"><span class="chat-suggest-icon">📖</span><span>졸업 이수 학점 기준은요?</span></button>
+        <button class="chat-suggest-btn" onclick="suggestAsk(this)" data-q="수강신청 방법을 알려주세요"><span class="chat-suggest-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg></span><span>수강신청 방법을 알려주세요</span></button>
+        <button class="chat-suggest-btn" onclick="suggestAsk(this)" data-q="학생 징계 종류는 무엇인가요?"><span class="chat-suggest-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="4" rx="1"/><path d="M4 6h16v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6z"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="15" y2="16"/></svg></span><span>학생 징계 종류는 무엇인가요?</span></button>
+        <button class="chat-suggest-btn" onclick="suggestAsk(this)" data-q="장학금 신청 절차를 알려주세요"><span class="chat-suggest-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg></span><span>장학금 신청 절차를 알려주세요</span></button>
+        <button class="chat-suggest-btn" onclick="suggestAsk(this)" data-q="휴학은 최대 몇 년까지 가능한가요?"><span class="chat-suggest-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span><span>휴학은 최대 몇 년까지 가능한가요?</span></button>
+        <button class="chat-suggest-btn" onclick="suggestAsk(this)" data-q="졸업 이수 학점 기준은요?"><span class="chat-suggest-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></span><span>졸업 이수 학점 기준은요?</span></button>
       </div></div>`;
     return;
   }

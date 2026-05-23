@@ -308,6 +308,14 @@
         "replaced": 1,
         "revised_at": "2026-05-22",
         "backup_id": "bulk_20260522_153119"
+      },
+      {
+        "kind": "bulk_replace",
+        "old_word": "총무",
+        "new_word": "총무인사",
+        "replaced": 6,
+        "revised_at": "2026-05-23",
+        "backup_id": "bulk_20260523_221309"
       }
     ]
   },
