@@ -8,9 +8,10 @@
 
 ---
 
-# 웹으로 실행
+> **2026 한성대학교 AX 프론티어 공모전 출품작**
 
-[Live Demo](web-production-90839.up.railway.app)
+
+ **[바로 체험하기](web-production-90839.up.railway.app)** 
 
 ---
 
